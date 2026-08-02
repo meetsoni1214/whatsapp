@@ -7,6 +7,12 @@
     "build": "pnpm --recursive build",
     "dev": "pnpm --parallel --filter @event-chat/api --filter @event-chat/web dev",
     "lint": "pnpm --recursive lint",
-    "test": "pnpm --recursive --if-present test"
+    "test": "pnpm --recursive --if-present test",
+    "db:up": "docker compose up -d postgres",
+    "db:test:up": "docker compose up -d postgres-test",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @event-chat/api db:generate",
+    "db:migrate": "pnpm --filter @event-chat/api db:migrate",
+    "test:integration": "pnpm --filter @event-chat/api test:integration"
   }
 }

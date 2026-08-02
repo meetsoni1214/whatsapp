@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: event_chat
+      POSTGRES_USER: event_chat
+      POSTGRES_PASSWORD: event_chat
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U event_chat -d event_chat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: event_chat_test
+      POSTGRES_USER: event_chat
+      POSTGRES_PASSWORD: event_chat
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U event_chat -d event_chat_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    tmpfs:
+      - /var/lib/postgresql/data
+
+volumes:
+  postgres_data:
