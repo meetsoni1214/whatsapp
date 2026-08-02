@@ -79,6 +79,9 @@ export const authSessions = pgTable(
       .notNull(),
   },
   (table) => [
+    unique('auth_sessions_refresh_token_hash_unique').on(
+      table.refreshTokenHash,
+    ),
     index('auth_sessions_user_id_idx').on(table.userId),
     index('auth_sessions_expires_at_idx').on(table.expiresAt),
   ],
