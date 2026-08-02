@@ -70,6 +70,6 @@ pnpm test:integration
 
 ## Current milestone
 
-Phase 1 is complete: PostgreSQL infrastructure, Drizzle schema and migrations, validated environment configuration, versioned API bootstrap, domain module boundaries, shared contracts, and persistence integration coverage are in place.
+Phase 1 is complete: PostgreSQL infrastructure, Drizzle schema and migrations, validated environment configuration, versioned API bootstrap, domain module boundaries, shared Zod runtime contracts, and persistence integration coverage are in place.
 
 Phase 2 adds username/password authentication, access and refresh sessions, and user discovery.

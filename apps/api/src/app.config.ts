@@ -1,4 +1,4 @@
-import { type INestApplication, ValidationPipe } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export function configureApp(app: INestApplication): void {
@@ -9,11 +9,4 @@ export function configureApp(app: INestApplication): void {
     credentials: true,
     origin: config.getOrThrow<string>('WEB_ORIGIN'),
   });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      forbidNonWhitelisted: true,
-      transform: true,
-      whitelist: true,
-    }),
-  );
 }

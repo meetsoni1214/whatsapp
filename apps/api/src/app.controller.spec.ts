@@ -15,8 +15,11 @@ describe('AppController', () => {
   });
 
   describe('health', () => {
-    it('should return "ok"', () => {
-      expect(appController.getHealth()).toBe('ok');
+    it('should return the validated health response', () => {
+      expect(appController.getHealth()).toMatchObject({
+        service: 'event-chat-api',
+        status: 'ok',
+      });
     });
   });
 });
