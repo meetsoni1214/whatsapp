@@ -15,6 +15,19 @@ const environmentSchema = z.object({
     .positive()
     .max(100)
     .default(10),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_ACCESS_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(86_400)
+    .default(900),
+  REFRESH_SESSION_TTL_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(365)
+    .default(30),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

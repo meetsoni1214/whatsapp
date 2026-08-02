@@ -33,7 +33,24 @@ export const authenticatedSessionSchema = z.object({
   user: publicUserSchema,
 });
 
+export const userSearchQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1)
+    .max(32)
+    .regex(/^[a-z0-9_]+$/, {
+      message:
+        'Search can only contain lowercase letters, numbers, and underscores',
+    }),
+  limit: z.coerce.number().int().positive().max(50).default(20),
+});
+
+export const publicUsersSchema = z.array(publicUserSchema);
+
 export type RegisterInput = z.infer<typeof registerInputSchema>;
 export type LoginInput = z.infer<typeof loginInputSchema>;
 export type PublicUser = z.infer<typeof publicUserSchema>;
 export type AuthenticatedSession = z.infer<typeof authenticatedSessionSchema>;
+export type UserSearchQuery = z.infer<typeof userSearchQuerySchema>;
