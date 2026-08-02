@@ -4,13 +4,12 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { entityIdSchema, usernameSchema } from '@event-chat/contracts';
-import { JwtService } from '@nestjs/jwt';
-import type { AccessTokenPayload, AuthenticatedRequest } from './auth.types';
+import { AuthTokenService } from './auth-token.service';
+import type { AuthenticatedRequest } from './auth.types';
 
 @Injectable()
 export class AccessTokenGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(private readonly tokens: AuthTokenService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -21,11 +20,7 @@ export class AccessTokenGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
-      request.user = {
-        id: entityIdSchema.parse(payload.sub),
-        username: usernameSchema.parse(payload.username),
-      };
+      request.user = await this.tokens.verifyAccessToken(token);
       return true;
     } catch {
       throw this.unauthorized();

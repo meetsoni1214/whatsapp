@@ -12,6 +12,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+export const USERS_USERNAME_UNIQUE_CONSTRAINT = 'users_username_unique';
+
 export const conversationType = pgEnum('conversation_type', [
   'direct',
   'group',
@@ -47,7 +49,7 @@ export const users = pgTable(
       .notNull(),
   },
   (table) => [
-    unique('users_username_unique').on(table.username),
+    unique(USERS_USERNAME_UNIQUE_CONSTRAINT).on(table.username),
     check(
       'users_username_lowercase',
       sql`${table.username} = lower(${table.username})`,

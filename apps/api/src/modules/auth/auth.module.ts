@@ -4,7 +4,10 @@ import { JwtModule } from '@nestjs/jwt';
 import type { Environment } from '../../config/environment';
 import { AccessTokenGuard } from './access-token.guard';
 import { AuthController } from './auth.controller';
+import { AuthRepository } from './auth.repository';
 import { AuthService } from './auth.service';
+import { AuthTokenService } from './auth-token.service';
+import { PasswordHasher } from './password-hasher';
 
 @Module({
   imports: [
@@ -19,7 +22,13 @@ import { AuthService } from './auth.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AccessTokenGuard],
-  exports: [JwtModule, AccessTokenGuard],
+  providers: [
+    AuthService,
+    AuthRepository,
+    AuthTokenService,
+    PasswordHasher,
+    AccessTokenGuard,
+  ],
+  exports: [AuthTokenService, AccessTokenGuard],
 })
 export class AuthModule {}
