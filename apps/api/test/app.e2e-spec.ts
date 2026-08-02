@@ -1,8 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { configureApp } from '../src/app.config';
+import { AppModule } from '../src/app.module';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -13,11 +14,21 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
   });
 
-  it('/health (GET)', () => {
-    return request(app.getHttpServer()).get('/health').expect(200).expect('ok');
+  it('/api/v1/health (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/api/v1/health')
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          service: 'event-chat-api',
+          status: 'ok',
+        });
+        expect(body).toHaveProperty('timestamp', expect.any(String));
+      });
   });
 
   afterEach(async () => {
