@@ -1,4 +1,9 @@
-import { clientFrameSchema, registerInputSchema } from '@event-chat/contracts';
+import {
+  clientFrameSchema,
+  createDirectConversationInputSchema,
+  messageHistoryQuerySchema,
+  registerInputSchema,
+} from '@event-chat/contracts';
 
 describe('shared runtime contracts', () => {
   it('normalizes valid registration input', () => {
@@ -41,5 +46,19 @@ describe('shared runtime contracts', () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it('validates direct conversation and history inputs', () => {
+    expect(
+      createDirectConversationInputSchema.parse({
+        participantId: '1685bc61-ac88-45e7-8437-593219fefb10',
+      }),
+    ).toEqual({
+      participantId: '1685bc61-ac88-45e7-8437-593219fefb10',
+    });
+    expect(messageHistoryQuerySchema.parse({})).toEqual({ limit: 50 });
+    expect(messageHistoryQuerySchema.safeParse({ limit: 101 }).success).toBe(
+      false,
+    );
   });
 });
