@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { DirectConversation } from "@event-chat/contracts";
 import { AlertCircle, LoaderCircle, Search, ShieldCheck } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCreateDirectConversation } from "@/features/conversations/queries";
 import { useUserSearch } from "@/features/users/queries";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
@@ -15,7 +17,7 @@ function SearchPlaceholder() {
   return (
     <div className="space-y-3 py-8" aria-hidden="true">
       {[0, 1, 2].map((item) => (
-        <div className="flex h-[4.75rem] items-center gap-4" key={item}>
+        <div className="flex h-19 items-center gap-4" key={item}>
           <Skeleton className="size-9 rounded-full" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-3 w-32" />
@@ -27,8 +29,15 @@ function SearchPlaceholder() {
   );
 }
 
-export function PeopleWorkspace() {
+interface PeopleWorkspaceProps {
+  onConversationCreated: (conversation: DirectConversation) => void;
+}
+
+export function PeopleWorkspace({
+  onConversationCreated,
+}: PeopleWorkspaceProps) {
   const [query, setQuery] = useState("");
+  const createConversation = useCreateDirectConversation();
   const normalizedQuery = query.trim().toLowerCase();
   const debouncedQuery = useDebouncedValue(normalizedQuery, 250);
   const searchResult = useUserSearch(debouncedQuery);
@@ -101,12 +110,14 @@ export function PeopleWorkspace() {
               Search the directory
             </h2>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Finding another user is the bridge to direct conversations in Phase 3.
+              Search by username, then start a private direct conversation.
             </p>
           </div>
         )}
 
-        {normalizedQuery && isSearching && results.length === 0 && <SearchPlaceholder />}
+        {normalizedQuery && isSearching && results.length === 0 && (
+          <SearchPlaceholder />
+        )}
 
         {showEmpty && (
           <div className="max-w-md py-12 lg:py-14">
@@ -131,9 +142,20 @@ export function PeopleWorkspace() {
           </Alert>
         )}
 
+        {createConversation.isError && (
+          <Alert variant="destructive" className="my-8 max-w-xl" role="alert">
+            <AlertCircle />
+            <AlertDescription>
+              {createConversation.error instanceof Error
+                ? createConversation.error.message
+                : "The conversation could not be created."}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {results.map((result, index) => (
           <div
-            className="grid min-h-[4.875rem] animate-in grid-cols-[1.75rem_auto_minmax(0,1fr)] items-center gap-3 border-b border-border fade-in slide-in-from-bottom-1 duration-300 sm:grid-cols-[1.75rem_auto_minmax(0,1fr)_auto] sm:gap-4"
+            className="grid min-h-19.5 animate-in grid-cols-[1.75rem_auto_minmax(0,1fr)] items-center gap-3 border-b border-border fade-in slide-in-from-bottom-1 duration-300 sm:grid-cols-[1.75rem_auto_minmax(0,1fr)_auto] sm:gap-4"
             key={result.id}
           >
             <span className="text-[10px] text-primary tabular-nums">
@@ -151,12 +173,19 @@ export function PeopleWorkspace() {
               variant="ghost"
               size="sm"
               className="col-start-3 ml-auto hidden gap-2 text-[11px] text-muted-foreground sm:flex"
-              disabled
+              onClick={() =>
+                createConversation.mutate(result.id, {
+                  onSuccess: (conversation) =>
+                    onConversationCreated(conversation),
+                })
+              }
+              disabled={createConversation.isPending}
             >
+              {createConversation.isPending &&
+              createConversation.variables === result.id ? (
+                <LoaderCircle className="animate-spin" />
+              ) : null}
               Start chat
-              <Badge variant="outline" className="text-[8px] uppercase">
-                Phase 3
-              </Badge>
             </Button>
           </div>
         ))}

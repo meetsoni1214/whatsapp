@@ -41,8 +41,12 @@ export function useLogout() {
     mutationFn: logout,
     onSettled: async () => {
       queryClient.setQueryData(queryKeys.session, null);
-      await queryClient.cancelQueries({ queryKey: queryKeys.users.all });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.users.all }),
+        queryClient.cancelQueries({ queryKey: queryKeys.conversations.all }),
+      ]);
       queryClient.removeQueries({ queryKey: queryKeys.users.all });
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.all });
     },
   });
 }

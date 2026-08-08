@@ -1,4 +1,12 @@
-import type { AuthenticatedSession, PublicUser } from "@event-chat/contracts";
+import {
+  directConversationSchema,
+  directConversationsSchema,
+  messagePageSchema,
+  type AuthenticatedSession,
+  type DirectConversation,
+  type MessagePage,
+  type PublicUser,
+} from "@event-chat/contracts";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1";
 
@@ -116,25 +124,73 @@ export async function logout(): Promise<void> {
   }
 }
 
-async function searchRequest(query: string): Promise<PublicUser[]> {
-  const response = await fetch(
-    `${API_URL}/users/search?q=${encodeURIComponent(query)}`,
-    {
-      headers: { Authorization: `Bearer ${accessToken ?? ""}` },
+async function protectedRequest(
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
+  const send = () => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${accessToken ?? ""}`);
+    return fetch(`${API_URL}${path}`, {
+      ...init,
       credentials: "include",
-    },
-  );
+      headers,
+    });
+  };
 
+  let response = await send();
+  if (response.status === 401) {
+    await restoreSession();
+    response = await send();
+  }
   if (!response.ok) throw await errorFrom(response);
-  return parseUsers(await response.json());
+  return response.json();
 }
 
 export async function searchUsers(query: string): Promise<PublicUser[]> {
-  try {
-    return await searchRequest(query);
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 401) throw error;
-    await restoreSession();
-    return searchRequest(query);
+  const value = await protectedRequest(
+    `/users/search?q=${encodeURIComponent(query)}`,
+  );
+  return parseUsers(value);
+}
+
+export async function createDirectConversation(
+  participantId: string,
+): Promise<DirectConversation> {
+  const value = await protectedRequest("/conversations/direct", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participantId }),
+  });
+  return parseResponse(directConversationSchema, value);
+}
+
+export async function listConversations(): Promise<DirectConversation[]> {
+  const value = await protectedRequest("/conversations");
+  return parseResponse(directConversationsSchema, value);
+}
+
+export async function getMessageHistory(
+  conversationId: string,
+  cursor?: string,
+): Promise<MessagePage> {
+  const search = new URLSearchParams({ limit: "50" });
+  if (cursor) search.set("cursor", cursor);
+  const value = await protectedRequest(
+    `/conversations/${encodeURIComponent(conversationId)}/messages?${search}`,
+  );
+  return parseResponse(messagePageSchema, value);
+}
+
+function parseResponse<T>(
+  schema: {
+    safeParse(value: unknown): { success: true; data: T } | { success: false };
+  },
+  value: unknown,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError("The API returned an invalid response", 502);
   }
+  return parsed.data;
 }
