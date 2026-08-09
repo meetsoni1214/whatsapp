@@ -8,11 +8,17 @@
     "dev": "pnpm --filter @event-chat/contracts build && pnpm --parallel --filter @event-chat/api --filter @event-chat/web dev",
     "lint": "pnpm --recursive lint",
     "test": "pnpm --recursive --if-present test",
+    "test:e2e": "pnpm --filter @event-chat/api test:e2e",
+    "test:browser": "pnpm db:test:up && playwright test",
+    "test:browser:install": "playwright install chromium",
     "db:up": "docker compose up -d postgres",
     "db:test:up": "docker compose up -d postgres-test",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @event-chat/api db:generate",
     "db:migrate": "pnpm --filter @event-chat/api db:migrate",
     "test:integration": "pnpm --filter @event-chat/api test:integration"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

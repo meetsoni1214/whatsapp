@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+output/playwright/
+.playwright-cli/
 .env
 .env.local
 *.log
