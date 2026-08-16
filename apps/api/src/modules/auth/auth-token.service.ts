@@ -10,11 +10,12 @@ import { JwtService } from '@nestjs/jwt';
 import { z } from 'zod';
 import type { Environment } from '../../config/environment';
 import { REFRESH_TOKEN_BYTES } from './auth.constants';
-import type { RefreshToken } from './auth.types';
+import type { RefreshToken, VerifiedAccessToken } from './auth.types';
 
 const accessTokenPayloadSchema = z.object({
   sub: entityIdSchema,
   username: usernameSchema,
+  exp: z.number().int().positive(),
 });
 
 @Injectable()
@@ -32,13 +33,20 @@ export class AuthTokenService {
   }
 
   async verifyAccessToken(token: string): Promise<PublicUser> {
+    return (await this.verifyAccessTokenSession(token)).user;
+  }
+
+  async verifyAccessTokenSession(token: string): Promise<VerifiedAccessToken> {
     const payload = accessTokenPayloadSchema.parse(
       await this.jwt.verifyAsync<Record<string, unknown>>(token),
     );
 
     return {
-      id: payload.sub,
-      username: payload.username,
+      user: {
+        id: payload.sub,
+        username: payload.username,
+      },
+      expiresAt: new Date(payload.exp * 1000),
     };
   }
 

@@ -10,6 +10,10 @@ import { publicUserSchema } from './auth';
 
 export const protocolVersion = 1 as const;
 
+export const webSocketCloseCodes = {
+  tokenExpired: 4001,
+} as const;
+
 export const authenticateFrameSchema = z.object({
   v: z.literal(protocolVersion),
   type: z.literal('auth.authenticate'),
@@ -149,5 +153,7 @@ export const serverFrameSchema = z.discriminatedUnion('type', [
 
 export type ClientFrame = z.infer<typeof clientFrameSchema>;
 export type ServerFrame = z.infer<typeof serverFrameSchema>;
+export type AuthenticateFrame = z.infer<typeof authenticateFrameSchema>;
+export type SendMessageFrame = z.infer<typeof sendMessageFrameSchema>;
 export type ClientMessageType = ClientFrame['type'];
 export type ServerMessageType = ServerFrame['type'];

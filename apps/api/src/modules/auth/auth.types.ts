@@ -20,6 +20,11 @@ export interface RefreshToken extends NewRefreshSession {
   value: string;
 }
 
+export interface VerifiedAccessToken {
+  expiresAt: Date;
+  user: PublicUser;
+}
+
 export interface UserWithPassword extends PublicUser {
   passwordHash: string;
 }
