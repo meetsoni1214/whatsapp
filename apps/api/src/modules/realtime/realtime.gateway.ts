@@ -21,7 +21,6 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
   WebSocketGateway,
-  WebSocketServer,
 } from '@nestjs/websockets';
 import WebSocket, { type RawData, type Server } from 'ws';
 import { AuthTokenService } from '../auth/auth-token.service';
@@ -55,9 +54,6 @@ export class RealtimeGateway
 {
   private readonly logger = new Logger(RealtimeGateway.name);
   private heartbeatTimer?: NodeJS.Timeout;
-
-  @WebSocketServer()
-  private server!: Server;
 
   constructor(
     private readonly tokens: AuthTokenService,
