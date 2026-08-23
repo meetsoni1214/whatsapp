@@ -72,4 +72,8 @@ export class ConversationsService {
       });
     }
   }
+
+  memberIds(conversationId: string): Promise<string[]> {
+    return this.repository.memberIds(conversationId);
+  }
 }

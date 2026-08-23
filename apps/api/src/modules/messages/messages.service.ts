@@ -1,12 +1,23 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import type {
   Message,
   MessageHistoryQuery,
   MessagePage,
+  SendMessageFrame,
 } from '@event-chat/contracts';
 import { ConversationsService } from '../conversations/conversations.service';
 import { decodeMessageCursor, encodeMessageCursor } from './message-cursor';
 import { MessagesRepository, type MessageRow } from './messages.repository';
+
+export interface CreateMessageResult {
+  inserted: boolean;
+  memberIds: string[];
+  message: Message;
+}
 
 @Injectable()
 export class MessagesService {
@@ -45,6 +56,37 @@ export class MessagesService {
         hasMore && oldest
           ? encodeMessageCursor({ id: oldest.id, createdAt: oldest.createdAt })
           : null,
+    };
+  }
+
+  async create(
+    senderId: string,
+    input: SendMessageFrame['payload'],
+  ): Promise<CreateMessageResult> {
+    await this.conversations.assertMember(input.conversationId, senderId);
+
+    const persisted = await this.repository.createIdempotent({
+      senderId,
+      conversationId: input.conversationId,
+      clientMessageId: input.clientMessageId,
+      content: input.content,
+    });
+
+    if (
+      !persisted.inserted &&
+      (persisted.row.conversationId !== input.conversationId ||
+        persisted.row.content !== input.content)
+    ) {
+      throw new ConflictException({
+        code: 'CONFLICT',
+        message: 'That client message ID was already used for another message',
+      });
+    }
+
+    return {
+      inserted: persisted.inserted,
+      memberIds: await this.conversations.memberIds(input.conversationId),
+      message: this.toMessage(persisted.row),
     };
   }
 

@@ -130,6 +130,15 @@ export class ConversationsRepository {
     return row.memberId ? 'member' : 'forbidden';
   }
 
+  async memberIds(conversationId: string): Promise<string[]> {
+    const rows = await this.database
+      .select({ userId: conversationMembers.userId })
+      .from(conversationMembers)
+      .where(eq(conversationMembers.conversationId, conversationId));
+
+    return rows.map((row) => row.userId);
+  }
+
   private directConversationQuery(currentUserId: string) {
     return this.database
       .select({
