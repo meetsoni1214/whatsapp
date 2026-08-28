@@ -7,6 +7,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getMessageHistory, listConversations } from "@/api";
 import { ConversationWorkspace } from "./conversation-workspace";
 
+const sendMessage = vi.fn();
+const retryMessage = vi.fn();
+
+vi.mock("@/features/realtime/realtime-state", () => ({
+  useRealtime: () => ({
+    error: null,
+    pendingMessages: [],
+    retryMessage,
+    sendMessage,
+    status: "live",
+  }),
+}));
+
 vi.mock("@/api", () => ({
   getMessageHistory: vi.fn(),
   listConversations: vi.fn(),
@@ -54,6 +67,8 @@ describe("ConversationWorkspace", () => {
   beforeEach(() => {
     vi.mocked(listConversations).mockReset();
     vi.mocked(getMessageHistory).mockReset();
+    sendMessage.mockReset();
+    retryMessage.mockReset();
   });
 
   it("links the empty inbox to user discovery", async () => {
@@ -67,7 +82,7 @@ describe("ConversationWorkspace", () => {
     expect(onFindPeople).toHaveBeenCalledOnce();
   });
 
-  it("opens a thread, loads older messages, and keeps composition disabled", async () => {
+  it("opens a thread, loads older messages, and sends through realtime", async () => {
     vi.mocked(listConversations).mockResolvedValue([conversation]);
     vi.mocked(getMessageHistory)
       .mockResolvedValueOnce({
@@ -100,7 +115,10 @@ describe("ConversationWorkspace", () => {
 
     await userEvent.click(await screen.findByText("bob"));
     expect(await screen.findByText("Newer hello")).toBeInTheDocument();
-    expect(screen.getByLabelText("Message composer")).toBeDisabled();
+    const composer = screen.getByLabelText("Message composer");
+    await userEvent.type(composer, "  Live hello  ");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    expect(sendMessage).toHaveBeenCalledWith(conversation.id, "Live hello");
 
     await userEvent.click(screen.getByRole("button", { name: "Load earlier" }));
     expect(await screen.findByText("Older hello")).toBeInTheDocument();

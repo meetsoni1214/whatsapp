@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type { DirectConversation, PublicUser } from "@event-chat/contracts";
 import {
   AlertCircle,
@@ -19,6 +19,7 @@ import {
   useConversations,
   useMessageHistory,
 } from "@/features/conversations/queries";
+import { useRealtime } from "@/features/realtime/realtime-state";
 import { cn } from "@/lib/utils";
 
 interface ConversationWorkspaceProps {
@@ -132,7 +133,9 @@ function ConversationList({
                     {conversation.participant.username}
                   </strong>
                   <span className="truncate text-[10px] text-muted-foreground">
-                    No messages yet
+                    {conversation.lastMessageAt
+                      ? "Recent message"
+                      : "No messages yet"}
                   </span>
                 </span>
                 <span className="grid justify-items-end gap-2 text-[9px] text-muted-foreground tabular-nums">
@@ -150,6 +153,16 @@ function ConversationList({
   );
 }
 
+interface DisplayMessage {
+  clientMessageId: string;
+  content: string;
+  createdAt: string;
+  deliveryState?: "queued" | "sending" | "failed";
+  error?: string;
+  id: string;
+  senderId: string;
+}
+
 function ConversationThread({
   conversation,
   currentUser,
@@ -160,14 +173,58 @@ function ConversationThread({
   onBack: () => void;
 }) {
   const history = useMessageHistory(conversation.id);
+  const realtime = useRealtime();
+  const [draft, setDraft] = useState("");
   const messages = useMemo(
     () => history.data?.pages.flatMap((page) => page.data).reverse() ?? [],
     [history.data],
   );
+  const displayMessages = useMemo<DisplayMessage[]>(() => {
+    const canonicalClientIds = new Set(
+      messages.map((message) => message.clientMessageId),
+    );
+    const pending = realtime.pendingMessages
+      .filter(
+        (message) =>
+          message.conversationId === conversation.id &&
+          !canonicalClientIds.has(message.clientMessageId),
+      )
+      .map((message) => ({
+        id: message.clientMessageId,
+        clientMessageId: message.clientMessageId,
+        senderId: currentUser.id,
+        content: message.content,
+        createdAt: message.createdAt,
+        deliveryState: message.status,
+        error: message.error,
+      }));
+
+    return [...messages, ...pending].sort(
+      (left, right) =>
+        new Date(left.createdAt).getTime() -
+        new Date(right.createdAt).getTime(),
+    );
+  }, [conversation.id, currentUser.id, messages, realtime.pendingMessages]);
+
+  const submitMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const content = draft.trim();
+    if (!content) return;
+    realtime.sendMessage(conversation.id, content);
+    setDraft("");
+  };
+
+  const connectionLabel = {
+    connecting: "Connecting",
+    authenticating: "Securing connection",
+    live: "Live",
+    reconnecting: "Reconnecting",
+    offline: "Offline · messages will queue",
+  }[realtime.status];
 
   return (
     <section className="flex min-h-0 flex-1 flex-col animate-in fade-in slide-in-from-right-2 duration-300">
-      <header className="flex h-[5.5rem] shrink-0 items-center gap-3 border-b border-border px-4 sm:px-7">
+      <header className="flex h-22 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-7">
         <Button
           type="button"
           variant="ghost"
@@ -183,8 +240,24 @@ function ConversationThread({
           <h2 className="truncate font-serif text-xl font-normal tracking-tight">
             {conversation.participant.username}
           </h2>
-          <span className="text-[10px] text-muted-foreground">
-            Direct conversation
+          <span
+            className={cn(
+              "flex items-center gap-1.5 text-[10px]",
+              realtime.status === "live"
+                ? "text-primary"
+                : "text-muted-foreground",
+            )}
+            aria-label={`Live connection: ${realtime.status}`}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                realtime.status === "live"
+                  ? "bg-primary"
+                  : "bg-muted-foreground/50",
+              )}
+            />
+            {connectionLabel}
           </span>
         </div>
         <LockKeyhole
@@ -194,7 +267,7 @@ function ConversationThread({
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(rgba(16,32,25,0.03)_1px,transparent_1px)] bg-[length:100%_4.5rem] px-4 py-6 sm:px-8"
+        className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(rgba(16,32,25,0.03)_1px,transparent_1px)] bg-size-[100%_4.5rem] px-4 py-6 sm:px-8"
         aria-live="polite"
         aria-busy={history.isPending}
       >
@@ -235,23 +308,25 @@ function ConversationThread({
           </Alert>
         )}
 
-        {!history.isPending && !history.isError && messages.length === 0 && (
-          <div className="grid min-h-full place-items-center py-16 text-center">
-            <div className="max-w-64">
-              <MessageSquareText className="mx-auto size-8 text-primary" />
-              <h3 className="mt-5 font-serif text-2xl font-normal tracking-tight">
-                A quiet conversation
-              </h3>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                There are no messages in this thread yet.
-              </p>
+        {!history.isPending &&
+          !history.isError &&
+          displayMessages.length === 0 && (
+            <div className="grid min-h-full place-items-center py-16 text-center">
+              <div className="max-w-64">
+                <MessageSquareText className="mx-auto size-8 text-primary" />
+                <h3 className="mt-5 font-serif text-2xl font-normal tracking-tight">
+                  A quiet conversation
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  Send the first message. It will be stored before delivery.
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {messages.length > 0 && (
+        {displayMessages.length > 0 && (
           <ol className="mx-auto flex max-w-3xl flex-col gap-3">
-            {messages.map((message) => {
+            {displayMessages.map((message) => {
               const isMine = message.senderId === currentUser.id;
               return (
                 <li
@@ -267,22 +342,48 @@ function ConversationThread({
                       isMine
                         ? "rounded-br-sm bg-primary text-primary-foreground"
                         : "rounded-bl-sm bg-muted text-foreground",
+                      message.deliveryState === "failed" &&
+                        "ring-2 ring-destructive/60",
                     )}
                   >
-                    <p className="whitespace-pre-wrap break-words">
+                    <p className="whitespace-pre-wrap wrap-break-words">
                       {message.content}
                     </p>
-                    <time
+                    <div
                       className={cn(
-                        "mt-1.5 block text-right text-[9px] tabular-nums",
+                        "mt-1.5 flex items-center justify-end gap-2 text-[9px] tabular-nums",
                         isMine
                           ? "text-primary-foreground/65"
                           : "text-muted-foreground",
                       )}
-                      dateTime={message.createdAt}
                     >
-                      {messageTimeFormatter.format(new Date(message.createdAt))}
-                    </time>
+                      <time dateTime={message.createdAt}>
+                        {messageTimeFormatter.format(
+                          new Date(message.createdAt),
+                        )}
+                      </time>
+                      {message.deliveryState &&
+                        message.deliveryState !== "failed" && (
+                          <span>
+                            {message.deliveryState === "queued"
+                              ? "Queued"
+                              : "Sending"}
+                          </span>
+                        )}
+                      {message.deliveryState === "failed" && (
+                        <button
+                          type="button"
+                          className="font-semibold underline underline-offset-2"
+                          aria-label={`Retry message: ${message.content}`}
+                          title={message.error}
+                          onClick={() =>
+                            realtime.retryMessage(message.clientMessageId)
+                          }
+                        >
+                          Retry
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </li>
               );
@@ -292,24 +393,43 @@ function ConversationThread({
       </div>
 
       <footer className="shrink-0 border-t border-border bg-background px-4 py-4 sm:px-7">
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
+        <form
+          className="mx-auto flex max-w-3xl items-center gap-2"
+          onSubmit={submitMessage}
+        >
           <Input
-            disabled
             aria-label="Message composer"
-            placeholder="Live messaging is not enabled yet"
+            maxLength={4096}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={
+              realtime.status === "live"
+                ? "Write a message"
+                : "Write now · it will send when connected"
+            }
             className="h-11 rounded-full bg-muted/45 px-5 text-xs"
           />
           <Button
-            disabled
+            type="submit"
+            disabled={!draft.trim()}
             size="icon"
             className="shrink-0 rounded-full"
             aria-label="Send message"
           >
             <Send />
           </Button>
-        </div>
-        <p className="mx-auto mt-2 max-w-3xl px-2 text-[9px] text-muted-foreground">
-          Sending becomes available with live messaging in the next milestone.
+        </form>
+        <p
+          className={cn(
+            "mx-auto mt-2 max-w-3xl px-2 text-[9px]",
+            realtime.error ? "text-destructive" : "text-muted-foreground",
+          )}
+          role={realtime.error ? "alert" : undefined}
+        >
+          {realtime.error ??
+            (realtime.status === "live"
+              ? "Messages are acknowledged only after they are stored."
+              : connectionLabel)}
         </p>
       </footer>
     </section>
