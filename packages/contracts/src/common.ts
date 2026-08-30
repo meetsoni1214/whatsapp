@@ -5,6 +5,12 @@ export const requestIdSchema = z.uuid();
 export const eventIdSchema = z.uuid();
 export const timestampSchema = z.iso.datetime();
 
+export const presenceStateSchema = z.object({
+  userId: entityIdSchema,
+  online: z.boolean(),
+  lastSeenAt: timestampSchema.nullable(),
+});
+
 export const apiErrorCodeSchema = z.enum([
   'AUTHENTICATION_REQUIRED',
   'FORBIDDEN',
@@ -38,6 +44,7 @@ export const cursorPageSchema = <TItem extends z.ZodType>(
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+export type PresenceState = z.infer<typeof presenceStateSchema>;
 export type CursorPage<T> = {
   data: T[];
   nextCursor: string | null;

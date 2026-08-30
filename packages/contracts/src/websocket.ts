@@ -3,6 +3,7 @@ import {
   apiErrorCodeSchema,
   entityIdSchema,
   eventIdSchema,
+  presenceStateSchema,
   requestIdSchema,
   timestampSchema,
 } from './common';
@@ -124,11 +125,7 @@ export const typingUpdatedFrameSchema = z.object({
 export const presenceUpdatedFrameSchema = z.object({
   ...serverEnvelopeShape,
   type: z.literal('presence.updated'),
-  payload: z.object({
-    userId: entityIdSchema,
-    online: z.boolean(),
-    lastSeenAt: timestampSchema.nullable(),
-  }),
+  payload: presenceStateSchema,
 });
 
 export const errorFrameSchema = z.object({

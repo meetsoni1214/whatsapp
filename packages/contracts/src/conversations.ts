@@ -3,6 +3,7 @@ import { publicUserSchema } from './auth';
 import {
   cursorPageSchema,
   entityIdSchema,
+  presenceStateSchema,
   timestampSchema,
 } from './common';
 
@@ -14,6 +15,7 @@ export const directConversationSchema = z.object({
   id: entityIdSchema,
   type: z.literal('direct'),
   participant: publicUserSchema,
+  presence: presenceStateSchema,
   createdAt: timestampSchema,
   lastMessageAt: timestampSchema.nullable(),
 });
