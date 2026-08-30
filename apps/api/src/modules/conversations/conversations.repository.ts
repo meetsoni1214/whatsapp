@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { DirectConversation } from '@event-chat/contracts';
 import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { DATABASE } from '../../database/database.constants';
 import {
@@ -12,12 +11,13 @@ import type { Database } from '../../database/database.types';
 
 type ConversationAccess = 'forbidden' | 'member' | 'missing';
 
-interface DirectConversationRow {
+export interface DirectConversationRecord {
   createdAt: Date;
   id: string;
   lastMessageAt: Date | null;
   participantId: string;
   participantUsername: string;
+  participantLastSeenAt: Date | null;
 }
 
 @Injectable()
@@ -83,17 +83,17 @@ export class ConversationsRepository {
   async findDirectByIdForUser(
     conversationId: string,
     currentUserId: string,
-  ): Promise<DirectConversation | undefined> {
+  ): Promise<DirectConversationRecord | undefined> {
     const [conversation] = await this.directConversationQuery(currentUserId)
       .where(eq(conversations.id, conversationId))
       .limit(1);
 
-    return conversation ? this.toDirectConversation(conversation) : undefined;
+    return conversation;
   }
 
   async listDirectForUser(
     currentUserId: string,
-  ): Promise<DirectConversation[]> {
+  ): Promise<DirectConversationRecord[]> {
     const rows = await this.directConversationQuery(currentUserId)
       .where(eq(conversationMembers.userId, currentUserId))
       .orderBy(
@@ -103,7 +103,7 @@ export class ConversationsRepository {
         desc(conversations.id),
       );
 
-    return rows.map((row) => this.toDirectConversation(row));
+    return rows;
   }
 
   async conversationAccess(
@@ -139,6 +139,25 @@ export class ConversationsRepository {
     return rows.map((row) => row.userId);
   }
 
+  async peerIdsForUser(userId: string): Promise<string[]> {
+    const rows = await this.database
+      .select({
+        userLowId: directConversations.userLowId,
+        userHighId: directConversations.userHighId,
+      })
+      .from(directConversations)
+      .where(
+        or(
+          eq(directConversations.userLowId, userId),
+          eq(directConversations.userHighId, userId),
+        ),
+      );
+
+    return rows.map((row) =>
+      row.userLowId === userId ? row.userHighId : row.userLowId,
+    );
+  }
+
   private directConversationQuery(currentUserId: string) {
     return this.database
       .select({
@@ -147,6 +166,7 @@ export class ConversationsRepository {
         lastMessageAt: conversations.lastMessageAt,
         participantId: users.id,
         participantUsername: users.username,
+        participantLastSeenAt: users.lastSeenAt,
       })
       .from(conversations)
       .innerJoin(
@@ -170,18 +190,5 @@ export class ConversationsRepository {
           ),
         ),
       );
-  }
-
-  private toDirectConversation(row: DirectConversationRow): DirectConversation {
-    return {
-      id: row.id,
-      type: 'direct',
-      participant: {
-        id: row.participantId,
-        username: row.participantUsername,
-      },
-      createdAt: row.createdAt.toISOString(),
-      lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
-    };
   }
 }

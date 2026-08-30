@@ -3,8 +3,11 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import type { DirectConversation } from '@event-chat/contracts';
-import { ConversationsRepository } from './conversations.repository';
+import { RealtimeConnectionsService } from '../realtime/realtime-connections.service';
+import {
+  ConversationsRepository,
+  type DirectConversationRecord,
+} from './conversations.repository';
 import { ConversationsService } from './conversations.service';
 
 const aliceId = '426aa224-2ec1-4530-898c-d0c48f8b59c9';
@@ -28,6 +31,9 @@ describe('ConversationsService', () => {
       ConversationsRepository['participantExists']
     >;
   };
+  let connections: {
+    isOnline: jest.MockedFunction<RealtimeConnectionsService['isOnline']>;
+  };
   let service: ConversationsService;
 
   beforeEach(() => {
@@ -38,8 +44,12 @@ describe('ConversationsService', () => {
       listDirectForUser: jest.fn(),
       participantExists: jest.fn(),
     };
+    connections = {
+      isOnline: jest.fn().mockReturnValue(false),
+    };
     service = new ConversationsService(
       repository as unknown as ConversationsRepository,
+      connections as unknown as RealtimeConnectionsService,
     );
   });
 
@@ -59,11 +69,12 @@ describe('ConversationsService', () => {
   });
 
   it('returns the direct conversation created by the repository', async () => {
-    const conversation: DirectConversation = {
+    const conversation: DirectConversationRecord = {
       id: 'af6ea967-9188-4a24-9908-81f8c0fc9443',
-      type: 'direct',
-      participant: { id: bobId, username: 'bob' },
-      createdAt: '2026-08-02T08:00:00.000Z',
+      participantId: bobId,
+      participantUsername: 'bob',
+      participantLastSeenAt: new Date('2026-08-02T07:55:00.000Z'),
+      createdAt: new Date('2026-08-02T08:00:00.000Z'),
       lastMessageAt: null,
     };
     repository.participantExists.mockResolvedValue(true);
@@ -72,7 +83,18 @@ describe('ConversationsService', () => {
 
     await expect(
       service.createDirect(aliceId, { participantId: bobId }),
-    ).resolves.toEqual(conversation);
+    ).resolves.toEqual({
+      id: conversation.id,
+      type: 'direct',
+      participant: { id: bobId, username: 'bob' },
+      presence: {
+        userId: bobId,
+        online: false,
+        lastSeenAt: '2026-08-02T07:55:00.000Z',
+      },
+      createdAt: '2026-08-02T08:00:00.000Z',
+      lastMessageAt: null,
+    });
   });
 
   it.each([

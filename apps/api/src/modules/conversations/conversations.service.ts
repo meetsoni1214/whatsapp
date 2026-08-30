@@ -8,11 +8,18 @@ import type {
   CreateDirectConversationInput,
   DirectConversation,
 } from '@event-chat/contracts';
-import { ConversationsRepository } from './conversations.repository';
+import { RealtimeConnectionsService } from '../realtime/realtime-connections.service';
+import {
+  ConversationsRepository,
+  type DirectConversationRecord,
+} from './conversations.repository';
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly repository: ConversationsRepository) {}
+  constructor(
+    private readonly repository: ConversationsRepository,
+    private readonly connections: RealtimeConnectionsService,
+  ) {}
 
   async createDirect(
     currentUserId: string,
@@ -45,11 +52,15 @@ export class ConversationsService {
       throw new Error('Created direct conversation could not be loaded');
     }
 
-    return conversation;
+    return this.toDirectConversation(conversation);
   }
 
-  list(currentUserId: string): Promise<DirectConversation[]> {
-    return this.repository.listDirectForUser(currentUserId);
+  async list(currentUserId: string): Promise<DirectConversation[]> {
+    const conversations =
+      await this.repository.listDirectForUser(currentUserId);
+    return conversations.map((conversation) =>
+      this.toDirectConversation(conversation),
+    );
   }
 
   async assertMember(conversationId: string, userId: string): Promise<void> {
@@ -75,5 +86,33 @@ export class ConversationsService {
 
   memberIds(conversationId: string): Promise<string[]> {
     return this.repository.memberIds(conversationId);
+  }
+
+  peerIdsForUser(userId: string): Promise<string[]> {
+    return this.repository.peerIdsForUser(userId);
+  }
+
+  private toDirectConversation(
+    conversation: DirectConversationRecord,
+  ): DirectConversation {
+    const online = this.connections.isOnline(conversation.participantId);
+
+    return {
+      id: conversation.id,
+      type: 'direct',
+      participant: {
+        id: conversation.participantId,
+        username: conversation.participantUsername,
+      },
+      presence: {
+        userId: conversation.participantId,
+        online,
+        lastSeenAt: online
+          ? null
+          : (conversation.participantLastSeenAt?.toISOString() ?? null),
+      },
+      createdAt: conversation.createdAt.toISOString(),
+      lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
+    };
   }
 }
