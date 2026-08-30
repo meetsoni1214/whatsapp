@@ -31,9 +31,11 @@ import {
   REALTIME_MAX_PAYLOAD_BYTES,
 } from './realtime.constants';
 import {
+  type PresenceTransition,
   type RealtimeConnection,
   RealtimeConnectionsService,
 } from './realtime-connections.service';
+import { PresenceService } from './presence.service';
 
 interface RealtimeError {
   code: ApiErrorCode;
@@ -58,6 +60,7 @@ export class RealtimeGateway
   constructor(
     private readonly tokens: AuthTokenService,
     private readonly messages: MessagesService,
+    private readonly presence: PresenceService,
     private readonly connections: RealtimeConnectionsService,
   ) {}
 
@@ -90,12 +93,24 @@ export class RealtimeGateway
   }
 
   handleDisconnect(socket: WebSocket): void {
-    this.connections.remove(socket);
+    const transition = this.connections.remove(socket);
+    if (transition) {
+      void this.publishPresence('offline', transition);
+    }
   }
 
-  onApplicationShutdown(): void {
+  async onApplicationShutdown(): Promise<void> {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    this.connections.closeAll(1001, 'Server shutting down');
+    try {
+      await this.presence.persistShutdown(
+        this.connections.onlineUserIds(),
+        new Date(),
+      );
+    } catch (error) {
+      this.logger.error('Could not persist presence during shutdown', error);
+    } finally {
+      this.connections.closeAll(1001, 'Server shutting down');
+    }
   }
 
   private enqueue(
@@ -187,7 +202,10 @@ export class RealtimeGateway
         frame.payload.accessToken,
       );
       if (connection.authTimer) clearTimeout(connection.authTimer);
-      this.connections.authenticate(connection, verified.user);
+      const transition = this.connections.authenticate(
+        connection,
+        verified.user,
+      );
 
       const expiresIn = Math.max(0, verified.expiresAt.getTime() - Date.now());
       connection.expiryTimer = setTimeout(() => {
@@ -210,6 +228,9 @@ export class RealtimeGateway
         occurredAt: new Date().toISOString(),
         payload: { user: verified.user },
       });
+      if (transition) {
+        void this.publishPresence('online', transition);
+      }
     } catch {
       this.sendError(
         connection.socket,
@@ -301,6 +322,36 @@ export class RealtimeGateway
         );
       }
       this.sendError(connection.socket, realtimeError, frame.requestId);
+    }
+  }
+
+  private async publishPresence(
+    state: 'online' | 'offline',
+    transition: PresenceTransition,
+  ): Promise<void> {
+    try {
+      const broadcast =
+        state === 'online'
+          ? await this.presence.online(transition)
+          : await this.presence.offline(transition);
+      if (!broadcast) return;
+
+      const frame: ServerFrame = {
+        v: protocolVersion,
+        type: 'presence.updated',
+        eventId: randomUUID(),
+        occurredAt: broadcast.occurredAt,
+        payload: broadcast.state,
+      };
+      const serialized = JSON.stringify(serverFrameSchema.parse(frame));
+      for (const recipient of broadcast.recipients) {
+        this.sendSerialized(recipient.socket, serialized);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Presence ${state} transition failed for ${transition.user.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 
