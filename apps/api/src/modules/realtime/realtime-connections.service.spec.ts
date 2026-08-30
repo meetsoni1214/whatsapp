@@ -15,18 +15,28 @@ describe('RealtimeConnectionsService', () => {
     const firstConnection = service.add(first);
     const secondConnection = service.add(second);
 
-    service.authenticate(firstConnection, alice);
-    service.authenticate(secondConnection, alice);
+    const firstOnline = service.authenticate(firstConnection, alice);
+    const secondOnline = service.authenticate(secondConnection, alice);
+
+    expect(firstOnline).toMatchObject({ revision: 1, user: alice });
+    expect(firstOnline?.occurredAt).toBeInstanceOf(Date);
+    expect(secondOnline).toBeNull();
+    expect(service.isOnline(alice.id)).toBe(true);
+    expect(service.onlineUserIds()).toEqual([alice.id]);
 
     expect(service.forUsers([alice.id])).toEqual([
       firstConnection,
       secondConnection,
     ]);
 
-    service.remove(first);
+    expect(service.remove(first)).toBeNull();
     expect(service.forUsers([alice.id])).toEqual([secondConnection]);
 
-    service.remove(second);
+    const offline = service.remove(second);
+    expect(offline).toMatchObject({ revision: 2, user: alice });
+    expect(service.isCurrent(alice.id, 1)).toBe(false);
+    expect(service.isCurrent(alice.id, 2)).toBe(true);
+    expect(service.isOnline(alice.id)).toBe(false);
     expect(service.forUsers([alice.id])).toEqual([]);
   });
 
