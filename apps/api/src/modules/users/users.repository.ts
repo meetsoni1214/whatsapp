@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PublicUser } from '@event-chat/contracts';
-import { and, asc, eq, ilike, ne } from 'drizzle-orm';
+import { and, asc, eq, ilike, ne, sql } from 'drizzle-orm';
 import { DATABASE } from '../../database/database.constants';
 import { users } from '../../database/schema';
 import type { Database } from '../../database/database.types';
@@ -37,5 +37,16 @@ export class UsersRepository {
       )
       .orderBy(asc(users.username))
       .limit(limit);
+  }
+
+  async updateLastSeenAt(userId: string, lastSeenAt: Date): Promise<void> {
+    const timestamp = lastSeenAt.toISOString();
+    await this.database
+      .update(users)
+      .set({
+        lastSeenAt: sql`greatest(coalesce(${users.lastSeenAt}, ${timestamp}::timestamptz), ${timestamp}::timestamptz)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
 }

@@ -26,4 +26,8 @@ export class UsersService {
       query.limit,
     );
   }
+
+  updateLastSeenAt(userId: string, lastSeenAt: Date): Promise<void> {
+    return this.repository.updateLastSeenAt(userId, lastSeenAt);
+  }
 }
