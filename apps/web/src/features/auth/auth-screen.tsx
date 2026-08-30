@@ -67,14 +67,14 @@ export function AuthScreen() {
             Conversation starts with identity.
           </h1>
           <p className="mt-6 text-sm text-background/60">
-            Secure sessions now. Durable messages next.
+            Authenticated, durable, and retry-safe.
           </p>
         </div>
 
         <div className="relative hidden grid-cols-[auto_1fr_auto] items-center gap-4 border-t border-background/15 pt-5 text-xs text-background/55 sm:grid">
-          <span className="text-emerald-300 tabular-nums">02</span>
-          <span>Authentication and user discovery</span>
-          <span className="text-background">In progress</span>
+          <span className="text-emerald-300 tabular-nums">04</span>
+          <span>Raw WebSocket messaging</span>
+          <span className="text-background">Complete</span>
         </div>
       </section>
 

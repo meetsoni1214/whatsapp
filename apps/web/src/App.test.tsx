@@ -16,6 +16,10 @@ vi.mock("@/features/auth/queries", () => ({
   useLogout: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/features/realtime/realtime-context", () => ({
+  RealtimeProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("@/features/conversations/conversation-workspace", () => ({
   ConversationWorkspace: ({ onFindPeople }: { onFindPeople: () => void }) => (
     <button onClick={onFindPeople}>Open directory</button>
