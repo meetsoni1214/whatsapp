@@ -1,5 +1,9 @@
 # Event-Driven Architecture Learning Path
 
+> This document explains the concepts and learning sequence. For the
+> decision-complete implementation phases and public interfaces, use
+> [ARCHITECTURE_PLAN.md](./ARCHITECTURE_PLAN.md).
+
 ## Project goal
 
 We will learn event-driven architecture by gradually building a WhatsApp-style chat application with:
@@ -125,8 +129,8 @@ Build:
 - Login and authentication
 - Creating a direct conversation
 - Listing conversations
-- Sending a message through HTTP
-- Fetching paginated message history
+- Preparing durable, idempotent message persistence
+- Fetching paginated message history through HTTP
 - PostgreSQL persistence
 
 Learn:
@@ -145,6 +149,7 @@ Do not add an event broker during this phase.
 Build:
 
 - Authenticated WebSocket connections
+- Durable, idempotent message commands
 - Live message delivery
 - Reconnection behavior
 - Heartbeats
@@ -338,9 +343,9 @@ We will complete the following vertical slices in order:
 4. PostgreSQL local environment
 5. User registration and login
 6. Direct conversations
-7. Persisted HTTP messages
-8. Live WebSocket messages
-9. Reconnection and missed-message recovery
+7. Persisted message history over HTTP
+8. Durable live WebSocket message commands
+9. Reconnection and missed-message recovery over HTTP
 
 At every step we should be able to run the application and explain why every component exists.
 
@@ -361,6 +366,9 @@ The goal is not merely to finish a clone. The goal is to be able to explain the 
 
 - [MDN: WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 - [NestJS: WebSockets](https://docs.nestjs.com/websockets/gateways)
+- [Interactive durable WebSocket lifecycle](./websocket-lifecycle-visual.html)
+- [Interactive multi-session presence lifecycle](./presence-lifecycle-visual.html)
+- [Interactive message pagination walkthrough](./message-pagination-visual.html)
 - [RabbitMQ JavaScript tutorials](https://www.rabbitmq.com/tutorials/tutorial-one-javascript)
 - [Azure Architecture Center: Event-driven architecture](https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven)
 - [CloudEvents specification](https://cloudevents.io/)

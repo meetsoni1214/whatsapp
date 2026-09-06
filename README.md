@@ -4,6 +4,9 @@ A WhatsApp-style learning project built with NestJS, React, PostgreSQL, Drizzle,
 
 - [Architecture plan](./ARCHITECTURE_PLAN.md)
 - [Learning path](./LEARNING_PATH.md)
+- [Message pagination walkthrough](./message-pagination-visual.html)
+- [Durable WebSocket lifecycle walkthrough](./websocket-lifecycle-visual.html)
+- [Presence lifecycle walkthrough](./presence-lifecycle-visual.html)
 
 ## Workspace
 
@@ -11,6 +14,7 @@ A WhatsApp-style learning project built with NestJS, React, PostgreSQL, Drizzle,
 apps/api             NestJS and TypeScript backend
 apps/web             React, TypeScript, and Vite frontend
 packages/contracts   Shared REST, WebSocket, and error contracts
+tests/browser        Two-session Playwright acceptance coverage
 ```
 
 ## Prerequisites
@@ -45,6 +49,9 @@ Then open:
 
 - Web application: http://localhost:5173
 - API health endpoint: http://localhost:3000/api/v1/health
+- Raw WebSocket endpoint: ws://localhost:3000/ws
+
+The browser derives the WebSocket URL from `VITE_API_URL`; `VITE_WS_URL` can override it for split deployments.
 
 ## Database workflow
 
@@ -64,12 +71,16 @@ The development database uses port 5432. The isolated test database uses port 54
 pnpm build
 pnpm lint
 pnpm test
-pnpm --filter @event-chat/api test:e2e
+pnpm test:e2e
 pnpm test:integration
+pnpm test:browser:install
+pnpm test:browser
 ```
+
+Playwright failure traces, screenshots, and videos are written under `output/playwright/`.
 
 ## Current milestone
 
-Phase 1 is complete: PostgreSQL infrastructure, Drizzle schema and migrations, validated environment configuration, versioned API bootstrap, domain module boundaries, shared Zod runtime contracts, and persistence integration coverage are in place.
+Phases 1 through 4 are complete: authenticated users can discover people, create direct conversations, exchange persisted messages over raw WebSockets, retry without duplicates, synchronize multiple sessions, and recover missed history after reconnecting.
 
-Phase 2 adds username/password authentication, access and refresh sessions, and user discovery.
+Phase 5 is in progress: peer-scoped multi-session presence and durable last-seen recovery are complete. Expiring typing indicators are next, followed by monotonic delivered/read receipts.
