@@ -19,6 +19,7 @@
     "test:integration": "pnpm --filter @event-chat/api test:integration"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1"
+    "@playwright/test": "^1.62.1",
+    "jscpd": "^5.1.2"
   }
 }
