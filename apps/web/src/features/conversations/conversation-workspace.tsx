@@ -19,6 +19,7 @@ import {
   useConversations,
   useMessageHistory,
 } from "@/features/conversations/queries";
+import { ParticipantPresence } from "@/features/conversations/participant-presence";
 import { useRealtime } from "@/features/realtime/realtime-state";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,7 @@ function ConversationList({
   onSelect: (conversationId: string) => void;
   selectedConversationId: string | null;
 }) {
+  const realtime = useRealtime();
   return (
     <>
       <header className="border-b border-border px-5 py-6 sm:px-7">
@@ -113,6 +115,8 @@ function ConversationList({
           {conversations.map((conversation, index) => {
             const activity =
               conversation.lastMessageAt ?? conversation.createdAt;
+            const presence =
+              realtime.presenceFor(conversation.participant.id) ?? conversation.presence;
             const isSelected = selectedConversationId === conversation.id;
 
             return (
@@ -127,7 +131,10 @@ function ConversationList({
                 onClick={() => onSelect(conversation.id)}
                 aria-current={isSelected ? "true" : undefined}
               >
-                <UserAvatar username={conversation.participant.username} />
+                <UserAvatar
+                  username={conversation.participant.username}
+                  online={presence.online}
+                />
                 <span className="grid min-w-0 gap-1">
                   <strong className="truncate text-xs">
                     {conversation.participant.username}
@@ -174,6 +181,8 @@ function ConversationThread({
 }) {
   const history = useMessageHistory(conversation.id);
   const realtime = useRealtime();
+  const participantPresence =
+    realtime.presenceFor(conversation.participant.id) ?? conversation.presence;
   const [draft, setDraft] = useState("");
   const messages = useMemo(
     () => history.data?.pages.flatMap((page) => page.data).reverse() ?? [],
@@ -235,30 +244,18 @@ function ConversationThread({
         >
           <ArrowLeft />
         </Button>
-        <UserAvatar username={conversation.participant.username} />
+        <UserAvatar
+          username={conversation.participant.username}
+          online={participantPresence.online}
+        />
         <div className="grid min-w-0 gap-0.5">
           <h2 className="truncate font-serif text-xl font-normal tracking-tight">
             {conversation.participant.username}
           </h2>
-          <span
-            className={cn(
-              "flex items-center gap-1.5 text-[10px]",
-              realtime.status === "live"
-                ? "text-primary"
-                : "text-muted-foreground",
-            )}
-            aria-label={`Live connection: ${realtime.status}`}
-          >
-            <span
-              className={cn(
-                "size-1.5 rounded-full",
-                realtime.status === "live"
-                  ? "bg-primary"
-                  : "bg-muted-foreground/50",
-              )}
-            />
-            {connectionLabel}
-          </span>
+          <ParticipantPresence
+            presence={participantPresence}
+            className="text-[10px]"
+          />
         </div>
         <LockKeyhole
           className="ml-auto size-3.5 text-primary"
@@ -425,6 +422,7 @@ function ConversationThread({
             realtime.error ? "text-destructive" : "text-muted-foreground",
           )}
           role={realtime.error ? "alert" : undefined}
+          aria-label={`Live connection: ${realtime.status}`}
         >
           {realtime.error ??
             (realtime.status === "live"

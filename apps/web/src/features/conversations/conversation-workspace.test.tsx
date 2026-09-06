@@ -9,6 +9,7 @@ import { ConversationWorkspace } from "./conversation-workspace";
 
 const sendMessage = vi.fn();
 const retryMessage = vi.fn();
+const presenceFor = vi.fn();
 
 vi.mock("@/features/realtime/realtime-state", () => ({
   useRealtime: () => ({
@@ -16,6 +17,7 @@ vi.mock("@/features/realtime/realtime-state", () => ({
     pendingMessages: [],
     retryMessage,
     sendMessage,
+    presenceFor,
     status: "live",
   }),
 }));
@@ -33,6 +35,11 @@ const conversation: DirectConversation = {
     username: "bob",
   },
   createdAt: "2026-08-02T08:00:00.000Z",
+  presence: {
+    userId: "1685bc61-ac88-45e7-8437-593219fefb10",
+    online: false,
+    lastSeenAt: null,
+  },
   lastMessageAt: null,
 };
 
@@ -68,6 +75,7 @@ describe("ConversationWorkspace", () => {
     vi.mocked(listConversations).mockReset();
     vi.mocked(getMessageHistory).mockReset();
     sendMessage.mockReset();
+    presenceFor.mockReset();
     retryMessage.mockReset();
   });
 
@@ -134,5 +142,26 @@ describe("ConversationWorkspace", () => {
     expect(older.compareDocumentPosition(newer)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+
+  it("uses realtime presence in the list and active thread", async () => {
+    presenceFor.mockReturnValue({
+      userId: conversation.participant.id,
+      online: true,
+      lastSeenAt: null,
+    });
+    vi.mocked(listConversations).mockResolvedValue([conversation]);
+    vi.mocked(getMessageHistory).mockResolvedValue({
+      data: [],
+      nextCursor: null,
+    });
+    renderWorkspace();
+
+    expect(
+      await screen.findByLabelText("bob is online"),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByText("bob"));
+    expect(screen.getByText("Online")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("bob is online")).toHaveLength(2);
   });
 });

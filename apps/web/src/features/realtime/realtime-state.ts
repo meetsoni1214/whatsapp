@@ -1,10 +1,12 @@
 import { createContext, useContext } from "react";
+import type { PresenceState } from '@event-chat/contracts';
 import type { PendingMessage, RealtimeStatus } from "./realtime-client";
 
 export interface RealtimeContextValue {
   error: string | null;
   pendingMessages: PendingMessage[];
   retryMessage: (clientMessageId: string) => void;
+  presenceFor: (userId: string) => PresenceState | undefined;
   sendMessage: (conversationId: string, content: string) => void;
   status: RealtimeStatus;
 }

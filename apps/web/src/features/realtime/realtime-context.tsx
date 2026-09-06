@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type {
   AuthenticatedSession,
   Message,
+  PresenceState,
   ServerFrame,
 } from "@event-chat/contracts";
 import { restoreSession } from "@/api";
@@ -19,6 +20,12 @@ import {
 } from "./realtime-cache";
 
 import { RealtimeContext, type RealtimeContextValue } from "./realtime-state";
+
+interface TimedPresence {
+  occurredAt: string;
+  state: PresenceState;
+}
+
 export function RealtimeProvider({
   children,
   session,
@@ -30,6 +37,9 @@ export function RealtimeProvider({
   const tokenRef = useRef(session.accessToken);
   const clientRef = useRef<RealtimeClient | null>(null);
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
+  const [presenceOverrides, setPresenceOverrides] = useState<
+    Record<string, TimedPresence>
+  >({});
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +78,22 @@ export function RealtimeProvider({
         };
       }
 
+      if (frame.type === "presence.updated") {
+        setPresenceOverrides((current) => {
+          const previous = current[frame.payload.userId];
+          if (previous && previous.occurredAt >= frame.occurredAt) {
+            return current;
+          }
+          return {
+            ...current,
+            [frame.payload.userId]: {
+              occurredAt: frame.occurredAt,
+              state: frame.payload,
+            },
+          };
+        });
+      }
+
       if (message) {
         setError(null);
         upsertRealtimeMessage(queryClient, message);
@@ -85,7 +111,10 @@ export function RealtimeProvider({
       },
       onAuthenticated: (reconnected) => {
         setError(null);
-        if (reconnected) recoverRealtimeQueries(queryClient);
+        if (reconnected) {
+          setPresenceOverrides({});
+          recoverRealtimeQueries(queryClient);
+        }
       },
       onFrame: handleFrame,
       onOutboxChange: setPendingMessages,
@@ -110,6 +139,7 @@ export function RealtimeProvider({
       error,
       pendingMessages,
       status,
+      presenceFor: (userId) => presenceOverrides[userId]?.state,
       retryMessage: (clientMessageId) =>
         clientRef.current?.retryMessage(clientMessageId),
       sendMessage: (conversationId, content) => {
@@ -119,7 +149,7 @@ export function RealtimeProvider({
         clientRef.current?.sendMessage(conversationId, trimmed);
       },
     }),
-    [error, pendingMessages, status],
+    [error, pendingMessages, presenceOverrides, status],
   );
 
   return (

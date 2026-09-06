@@ -27,6 +27,11 @@ describe("PeopleWorkspace", () => {
         username: "bob",
       },
       createdAt: "2026-08-02T08:00:00.000Z",
+      presence: {
+        userId: "1685bc61-ac88-45e7-8437-593219fefb10",
+        online: false,
+        lastSeenAt: null,
+      },
       lastMessageAt: null,
     };
     vi.mocked(searchUsers).mockResolvedValue([conversation.participant]);
