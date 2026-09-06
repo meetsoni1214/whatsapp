@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Durable WebSocket messaging — visual walkthrough</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #09110d;
+        --surface: #0e1812;
+        --surface-2: #132119;
+        --line: #26382d;
+        --line-strong: #3d5948;
+        --muted: #8ea097;
+        --text: #f1f6f3;
+        --accent: #55e38f;
+        --accent-soft: rgba(85, 227, 143, 0.13);
+        --warning: #f4c66a;
+        --warning-soft: rgba(244, 198, 106, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 76% -15%, rgba(85, 227, 143, 0.11), transparent 34rem),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      button { color: inherit; font: inherit; }
+      code, pre, .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .shell {
+        width: min(1540px, 100%);
+        margin: 0 auto;
+        padding: 26px clamp(18px, 4vw, 64px) 70px;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 30px;
+        min-height: 250px;
+        padding-top: clamp(8px, 3vw, 34px);
+        animation: arrive 560ms ease-out both;
+      }
+      .eyebrow {
+        margin: 0 0 13px;
+        color: var(--accent);
+        font: 750 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 930px;
+        margin: 0;
+        font-size: clamp(42px, 6.8vw, 92px);
+        font-weight: 610;
+        letter-spacing: -0.066em;
+        line-height: 0.89;
+      }
+      .lede {
+        max-width: 650px;
+        margin: 24px 0 0;
+        color: var(--muted);
+        font-size: clamp(14px, 1.4vw, 18px);
+        line-height: 1.6;
+      }
+      .protocol-mark {
+        display: grid;
+        justify-items: end;
+        gap: 9px;
+        padding-top: 4px;
+        color: var(--muted);
+        font: 650 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .protocol-mark strong {
+        color: var(--text);
+        font-size: 30px;
+        font-weight: 560;
+        letter-spacing: -0.05em;
+      }
+
+      .progress {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        margin: 0 calc(clamp(18px, 4vw, 64px) * -1) 22px;
+        padding: 11px clamp(18px, 4vw, 64px);
+        border-block: 1px solid rgba(38, 56, 45, 0.72);
+        background: rgba(9, 17, 13, 0.87);
+        backdrop-filter: blur(18px);
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 6px;
+      }
+      .step {
+        position: relative;
+        min-height: 38px;
+        padding: 0 7px 7px;
+        border: 0;
+        background: transparent;
+        color: #5e7167;
+        cursor: pointer;
+        font-size: 10px;
+        transition: color 180ms ease, background 180ms ease;
+      }
+      .step::after {
+        position: absolute;
+        right: 7px;
+        bottom: 2px;
+        left: 7px;
+        height: 2px;
+        border-radius: 99px;
+        background: #213128;
+        content: "";
+      }
+      .step.done, .step.active { color: var(--text); }
+      .step.done::after { background: #315f43; }
+      .step.active { background: var(--accent-soft); }
+      .step.active::after { background: var(--accent); }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(300px, 0.76fr) minmax(600px, 1.55fr);
+        min-height: 650px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: 0 34px 90px rgba(0, 0, 0, 0.28);
+        animation: arrive 640ms 80ms ease-out both;
+      }
+
+      .lesson {
+        display: flex;
+        flex-direction: column;
+        padding: clamp(26px, 3.6vw, 52px);
+        border-right: 1px solid var(--line);
+      }
+      .lesson-index {
+        color: var(--accent);
+        font: 750 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .lesson h2 {
+        min-height: 2.18em;
+        margin: 20px 0 15px;
+        font-size: clamp(30px, 3.4vw, 50px);
+        font-weight: 610;
+        letter-spacing: -0.05em;
+        line-height: 1.02;
+      }
+      .lesson-copy {
+        min-height: 7.5em;
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.67;
+      }
+      .invariant {
+        margin: 24px 0 0;
+        padding-left: 15px;
+        border-left: 2px solid var(--accent);
+        color: #c9d6cf;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .frame {
+        margin-top: 28px;
+        overflow: hidden;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: #09100c;
+      }
+      .frame-label {
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--line);
+        color: #66796e;
+        font: 750 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      pre {
+        min-height: 128px;
+        margin: 0;
+        padding: 15px;
+        overflow: auto;
+        color: #cbd8d1;
+        font-size: 11px;
+        line-height: 1.62;
+        white-space: pre-wrap;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 28px;
+      }
+      .control {
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        background: transparent;
+        cursor: pointer;
+        font-size: 11px;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+      .control:hover:not(:disabled) {
+        transform: translateY(-1px);
+        border-color: var(--accent);
+      }
+      .control:disabled { cursor: default; opacity: 0.3; }
+      .control.primary {
+        flex: 1;
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #07110b;
+        font-weight: 750;
+      }
+      .control.icon { width: 44px; }
+      .keyboard {
+        margin: 10px 0 0;
+        color: #63746a;
+        font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .system {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        background:
+          linear-gradient(rgba(85, 227, 143, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(85, 227, 143, 0.025) 1px, transparent 1px),
+          var(--surface-2);
+        background-size: 42px 42px;
+      }
+      .system-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 74px;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--line);
+      }
+      .system-title {
+        margin: 0;
+        font: 720 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+      .durability {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .durability i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 16px rgba(85, 227, 143, 0.7);
+      }
+
+      .network {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+        min-height: 480px;
+        padding: 52px 26px 30px;
+      }
+      .lane {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        border-left: 1px solid rgba(61, 89, 72, 0.45);
+      }
+      .lane:last-child { border-right: 1px solid rgba(61, 89, 72, 0.45); }
+      .node {
+        position: relative;
+        z-index: 3;
+        display: grid;
+        width: 74px;
+        height: 74px;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        background: #0c1510;
+        color: #81948a;
+        font: 760 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-align: center;
+        text-transform: uppercase;
+        transition: border-color 260ms ease, color 260ms ease, box-shadow 260ms ease, transform 260ms ease;
+      }
+      .lane.active .node {
+        transform: scale(1.055);
+        border-color: var(--accent);
+        color: var(--text);
+        box-shadow: 0 0 0 8px var(--accent-soft), 0 0 28px rgba(85, 227, 143, 0.16);
+      }
+      .lane.warning .node {
+        border-color: var(--warning);
+        color: var(--warning);
+        box-shadow: 0 0 0 8px var(--warning-soft);
+      }
+      .node-label {
+        margin-top: 14px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 680;
+      }
+      .node-state {
+        min-height: 2.6em;
+        margin-top: 7px;
+        padding-inline: 10px;
+        color: var(--muted);
+        font-size: 9px;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .rail {
+        position: absolute;
+        top: 89px;
+        right: 12.5%;
+        left: 12.5%;
+        z-index: 1;
+        height: 2px;
+        background: #31463a;
+      }
+      .rail::after {
+        position: absolute;
+        inset: -1px auto -1px 0;
+        width: var(--progress, 0%);
+        border-radius: 99px;
+        background: var(--accent);
+        box-shadow: 0 0 16px rgba(85, 227, 143, 0.42);
+        content: "";
+        transition: width 480ms cubic-bezier(.2,.8,.2,1);
+      }
+      .signal {
+        position: absolute;
+        top: 81px;
+        left: var(--signal-x, 12.5%);
+        z-index: 5;
+        width: 18px;
+        height: 18px;
+        border: 5px solid #0b140f;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 24px rgba(85, 227, 143, 0.75);
+        transform: translateX(-50%);
+        transition: left 480ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
+      }
+      .signal.hidden { opacity: 0; }
+      .signal.retry {
+        background: var(--warning);
+        box-shadow: 0 0 24px rgba(244, 198, 106, 0.68);
+      }
+
+      .event-log {
+        position: absolute;
+        right: 28px;
+        bottom: 28px;
+        left: 28px;
+        z-index: 6;
+      }
+      .log-label {
+        margin-bottom: 8px;
+        color: #61736a;
+        font: 720 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      .log-line {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr) auto;
+        gap: 12px;
+        min-height: 52px;
+        align-items: center;
+        border-top: 1px solid var(--line);
+        color: #cbd7d1;
+        font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .log-line .time { color: #65786d; }
+      .log-line .result { color: var(--accent); text-align: right; }
+      .log-line.warning .result { color: var(--warning); }
+
+      .review {
+        display: grid;
+        grid-template-columns: 0.72fr 1.28fr;
+        gap: clamp(32px, 7vw, 100px);
+        padding: 68px 4px 0;
+      }
+      .review h2 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 50px);
+        letter-spacing: -0.045em;
+      }
+      .review p {
+        max-width: 430px;
+        margin: 14px 0 0;
+        color: var(--muted);
+        line-height: 1.62;
+      }
+      .invariants {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: invariant;
+      }
+      .invariants li {
+        counter-increment: invariant;
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 15px;
+        padding: 17px 0;
+        border-top: 1px solid var(--line);
+        color: #cbd7d1;
+        line-height: 1.55;
+      }
+      .invariants li::before {
+        content: "0" counter(invariant);
+        color: var(--accent);
+        font: 720 10px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .invariants strong { color: var(--text); }
+
+      @keyframes arrive {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (max-width: 980px) {
+        .hero { grid-template-columns: 1fr; min-height: 0; padding-bottom: 34px; }
+        .protocol-mark { display: none; }
+        .workspace { grid-template-columns: 1fr; }
+        .lesson { border-right: 0; border-bottom: 1px solid var(--line); }
+        .lesson h2, .lesson-copy { min-height: 0; }
+        .system { min-height: 580px; }
+        .review { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 650px) {
+        .shell { padding-inline: 12px; }
+        .progress { margin-inline: -12px; padding-inline: 12px; }
+        .step { font-size: 0; }
+        .step::before { content: attr(data-short); font-size: 9px; }
+        .system-head { padding-inline: 16px; }
+        .network { grid-template-columns: repeat(4, 112px); min-width: 448px; padding-inline: 0; }
+        .system { overflow-x: auto; }
+        .event-log { right: 14px; left: 14px; }
+        .log-line { grid-template-columns: 48px minmax(0, 1fr); }
+        .log-line .result { grid-column: 2; text-align: left; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Event Chat · Phase 04</p>
+          <h1>A message is live<br />because it is durable.</h1>
+          <p class="lede">Walk one message from an optimistic browser bubble to PostgreSQL, across active sockets, through a dropped acknowledgement, and back from recovery.</p>
+        </div>
+        <div class="protocol-mark"><span>Protocol</span><strong>WS / 01</strong><span>PostgreSQL authoritative</span></div>
+      </header>
+
+      <nav class="progress" aria-label="WebSocket lifecycle steps">
+        <div class="steps" id="steps"></div>
+      </nav>
+
+      <section class="workspace" aria-live="polite">
+        <article class="lesson">
+          <div class="lesson-index" id="lessonIndex">01 · Connect</div>
+          <h2 id="lessonTitle"></h2>
+          <p class="lesson-copy" id="lessonCopy"></p>
+          <p class="invariant" id="invariant"></p>
+          <div class="frame">
+            <div class="frame-label" id="frameLabel">Wire frame</div>
+            <pre id="frameCode"></pre>
+          </div>
+          <div class="controls">
+            <button class="control icon" id="previous" aria-label="Previous step">←</button>
+            <button class="control primary" id="next">Next step</button>
+            <button class="control icon" id="replay" aria-label="Restart walkthrough">↻</button>
+          </div>
+          <p class="keyboard">Use ← and → to move through the lifecycle</p>
+        </article>
+
+        <article class="system">
+          <header class="system-head">
+            <h3 class="system-title">One message · one client ID</h3>
+            <span class="durability"><i></i> database is the source of truth</span>
+          </header>
+          <div class="network" id="network">
+            <div class="rail" id="rail"></div>
+            <div class="signal" id="signal"></div>
+            <div class="lane" data-lane="alice">
+              <div class="node">Alice</div>
+              <strong class="node-label">Browser</strong>
+              <span class="node-state"></span>
+            </div>
+            <div class="lane" data-lane="gateway">
+              <div class="node">WS</div>
+              <strong class="node-label">Gateway</strong>
+              <span class="node-state"></span>
+            </div>
+            <div class="lane" data-lane="database">
+              <div class="node">PG</div>
+              <strong class="node-label">PostgreSQL</strong>
+              <span class="node-state"></span>
+            </div>
+            <div class="lane" data-lane="bob">
+              <div class="node">Bob</div>
+              <strong class="node-label">Browser</strong>
+              <span class="node-state"></span>
+            </div>
+            <div class="event-log">
+              <div class="log-label">Observed state</div>
+              <div class="log-line" id="logLine">
+                <span class="time" id="logTime">T+00</span>
+                <span id="logEvent"></span>
+                <span class="result" id="logResult"></span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="review">
+        <div>
+          <p class="eyebrow">The reliability contract</p>
+          <h2>Transport can fail.<br />The message cannot vanish.</h2>
+          <p>WebSocket delivery is immediate when possible. PostgreSQL and the client-generated ID make the same flow correct when the network is not.</p>
+        </div>
+        <ol class="invariants">
+          <li><span><strong>Authenticate first.</strong> No command is accepted before a valid access token establishes connection identity.</span></li>
+          <li><span><strong>Commit before acknowledge.</strong> <code>message.accepted</code> is proof of durable storage, not merely receipt by the gateway.</span></li>
+          <li><span><strong>Retry the identity.</strong> Reuse <code>clientMessageId</code> so a lost acknowledgement cannot create another row.</span></li>
+          <li><span><strong>Recover from truth.</strong> After reconnecting, reload the newest HTTP history instead of trusting that every live event arrived.</span></li>
+        </ol>
+      </section>
+    </main>
+
+    <script>
+      const walkthrough = [
+        {
+          nav: "Connect",
+          title: "Open one long-lived channel.",
+          copy: "Alice creates a raw WebSocket to /ws. The connection is only transport at this point: it has no user identity and cannot send commands yet.",
+          invariant: "The server starts a five-second authentication deadline as soon as the socket opens.",
+          label: "Connection",
+          code: "GET /ws\nUpgrade: websocket\nConnection: Upgrade",
+          active: ["alice", "gateway"],
+          warning: [],
+          states: ["socket connecting", "identity: unknown", "no query", "offline"],
+          signal: 25,
+          progress: 17,
+          event: "TCP connection upgraded to WebSocket",
+          result: "unauthenticated",
+        },
+        {
+          nav: "Authenticate",
+          title: "Identity must be the first frame.",
+          copy: "The browser sends its in-memory access token. The gateway verifies the signature and expiry, then registers this socket under Alice's user ID.",
+          invariant: "Invalid, late, or non-authentication first frames receive an error and close with policy code 1008.",
+          label: "auth.authenticate",
+          code: '{\n  "v": 1,\n  "type": "auth.authenticate",\n  "requestId": "req-auth",\n  "payload": { "accessToken": "ey..." }\n}',
+          active: ["alice", "gateway"],
+          warning: [],
+          states: ["identity offered", "Alice · live", "no query", "offline"],
+          signal: 37.5,
+          progress: 33,
+          event: "JWT verified · expiry timer scheduled",
+          result: "authenticated",
+        },
+        {
+          nav: "Optimistic",
+          title: "Render now. Keep one identity.",
+          copy: "Alice submits text. The UI immediately renders a queued bubble and places the command in an in-memory outbox with one client-generated UUID.",
+          invariant: "Every automatic retry keeps the same clientMessageId, even when the request crosses a new socket.",
+          label: "message.send",
+          code: '{\n  "type": "message.send",\n  "requestId": "req-71",\n  "payload": {\n    "clientMessageId": "client-42",\n    "content": "Hello Bob"\n  }\n}',
+          active: ["alice", "gateway"],
+          warning: [],
+          states: ["optimistic · sending", "authorizing member", "waiting", "connected"],
+          signal: 37.5,
+          progress: 33,
+          event: "Optimistic bubble client-42",
+          result: "sending",
+        },
+        {
+          nav: "Commit",
+          title: "Durability comes before speed.",
+          copy: "The message service verifies membership. PostgreSQL inserts the message under a unique sender/client ID and advances conversation activity in one transaction.",
+          invariant: "No acknowledgement leaves the server until the database transaction has committed.",
+          label: "Transaction",
+          code: "INSERT INTO messages (...)\nON CONFLICT (sender_id, client_message_id)\nDO NOTHING;\n\nUPDATE conversations\nSET last_message_at = greatest(...);",
+          active: ["gateway", "database"],
+          warning: [],
+          states: ["optimistic · sending", "awaiting commit", "row client-42", "connected"],
+          signal: 62.5,
+          progress: 67,
+          event: "Message row committed",
+          result: "durable",
+        },
+        {
+          nav: "Deliver",
+          title: "Acknowledge one. Broadcast to all.",
+          copy: "Alice's originating socket receives message.accepted. A message.created event is then broadcast to every active connection belonging to both members.",
+          invariant: "The acknowledgement correlates to the command; the created event represents the shared domain fact.",
+          label: "Server frames",
+          code: "Alice origin  ← message.accepted(req-71)\nAlice sessions ← message.created(client-42)\nBob sessions   ← message.created(client-42)",
+          active: ["alice", "gateway", "database", "bob"],
+          warning: [],
+          states: ["canonical · stored", "fan-out complete", "source of truth", "message visible"],
+          signal: 87.5,
+          progress: 100,
+          event: "message.created delivered to active sessions",
+          result: "live",
+        },
+        {
+          nav: "Disconnect",
+          title: "Now lose the acknowledgement.",
+          copy: "Imagine Alice's network drops after commit but before she observes the acknowledgement. Her optimistic bubble remains queued because the client cannot prove what happened.",
+          invariant: "A transport failure creates uncertainty, not permission to create a second logical message.",
+          label: "Failure",
+          code: "PostgreSQL: client-42 exists\nBrowser: acknowledgement unknown\nSocket: CLOSED\nOutbox: client-42 queued",
+          active: ["database"],
+          warning: ["alice", "gateway"],
+          states: ["offline · queued", "connection closed", "row client-42", "already received"],
+          signal: 37.5,
+          progress: 67,
+          event: "Connection lost after commit",
+          result: "uncertain",
+          retry: true,
+        },
+        {
+          nav: "Retry",
+          title: "Retry the command, not the message.",
+          copy: "After reconnecting, Alice resends client-42. The uniqueness constraint finds the existing row. The server returns its canonical ID without inserting or broadcasting again.",
+          invariant: "Same identity and same content is an idempotent success; changed content with the same ID is a conflict.",
+          label: "Idempotent retry",
+          code: "message.send(client-42)\n  → INSERT conflicts\n  → SELECT existing row\n  → message.accepted(canonical ID)\n  → no second message.created",
+          active: ["alice", "gateway", "database"],
+          warning: [],
+          states: ["reconnected", "duplicate recognized", "still one row", "one visible message"],
+          signal: 62.5,
+          progress: 67,
+          event: "Duplicate command resolved to existing row",
+          result: "exactly one",
+          retry: true,
+        },
+        {
+          nav: "Recover",
+          title: "Reload what live delivery missed.",
+          copy: "Once authentication succeeds again, the client resets cached histories and requests the newest page over HTTP. Any messages missed while offline arrive from PostgreSQL.",
+          invariant: "WebSockets optimize immediacy. HTTP recovery plus durable storage provides completeness.",
+          label: "Reconnect recovery",
+          code: "POST /auth/refresh   // when token expired\nWS auth.authenticate\nGET /conversations/:id/messages?limit=50\nReact Query ← canonical newest page",
+          active: ["alice", "gateway", "database", "bob"],
+          warning: [],
+          states: ["cache reconciled", "socket live", "canonical history", "message visible"],
+          signal: 12.5,
+          progress: 100,
+          event: "Newest durable history reconciled",
+          result: "recovered",
+        },
+      ];
+
+      const steps = document.querySelector("#steps");
+      const lanes = [...document.querySelectorAll(".lane")];
+      const rail = document.querySelector("#rail");
+      const signal = document.querySelector("#signal");
+      let current = 0;
+
+      walkthrough.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.className = "step";
+        button.dataset.short = String(index + 1).padStart(2, "0");
+        button.textContent = `${String(index + 1).padStart(2, "0")} · ${item.nav}`;
+        button.setAttribute("aria-label", "Step " + (index + 1) + ": " + item.nav);
+        button.addEventListener("click", () => render(index));
+        steps.appendChild(button);
+      });
+
+      function render(index) {
+        current = Math.max(0, Math.min(index, walkthrough.length - 1));
+        const item = walkthrough[current];
+        document.querySelector("#lessonIndex").textContent =
+          `${String(current + 1).padStart(2, "0")} · ${item.nav}`;
+        document.querySelector("#lessonTitle").textContent = item.title;
+        document.querySelector("#lessonCopy").textContent = item.copy;
+        document.querySelector("#invariant").textContent = item.invariant;
+        document.querySelector("#frameLabel").textContent = item.label;
+        document.querySelector("#frameCode").textContent = item.code;
+        document.querySelector("#logTime").textContent =
+          `T+${String(current * 2).padStart(2, "0")}`;
+        document.querySelector("#logEvent").textContent = item.event;
+        document.querySelector("#logResult").textContent = item.result;
+        document.querySelector("#logLine").classList.toggle("warning", Boolean(item.retry));
+
+        rail.style.setProperty("--progress", `${item.progress}%`);
+        signal.style.setProperty("--signal-x", `${item.signal}%`);
+        signal.classList.toggle("retry", Boolean(item.retry));
+        signal.classList.remove("hidden");
+        signal.animate(
+          [{ opacity: 0.25, transform: "translateX(-50%) scale(.75)" }, { opacity: 1, transform: "translateX(-50%) scale(1)" }],
+          { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" },
+        );
+
+        lanes.forEach((lane, laneIndex) => {
+          const name = lane.dataset.lane;
+          lane.classList.toggle("active", item.active.includes(name));
+          lane.classList.toggle("warning", item.warning.includes(name));
+          lane.querySelector(".node-state").textContent = item.states[laneIndex];
+        });
+
+        steps.querySelectorAll("button").forEach((button, stepIndex) => {
+          button.classList.toggle("active", stepIndex === current);
+          button.classList.toggle("done", stepIndex < current);
+          button.setAttribute("aria-current", stepIndex === current ? "step" : "false");
+        });
+
+        document.querySelector("#previous").disabled = current === 0;
+        const next = document.querySelector("#next");
+        next.disabled = current === walkthrough.length - 1;
+        next.textContent =
+          current === walkthrough.length - 2 ? "Finish walkthrough" : "Next step";
+      }
+
+      document.querySelector("#previous").addEventListener("click", () => render(current - 1));
+      document.querySelector("#next").addEventListener("click", () => render(current + 1));
+      document.querySelector("#replay").addEventListener("click", () => render(0));
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight") render(current + 1);
+        if (event.key === "ArrowLeft") render(current - 1);
+      });
+
+      render(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Message cursor pagination — visual walkthrough</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1210;
+        --surface: #121a16;
+        --surface-2: #17221c;
+        --line: #2a3930;
+        --muted: #91a198;
+        --text: #f3f7f4;
+        --accent: #54df91;
+        --accent-soft: rgba(84, 223, 145, 0.13);
+        --amber: #ffc864;
+        --amber-soft: rgba(255, 200, 100, 0.13);
+        --blue: #78aaff;
+        --blue-soft: rgba(120, 170, 255, 0.13);
+        --danger: #ff8585;
+        --radius: 18px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 92% -10%, rgba(84, 223, 145, 0.12), transparent 30rem),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button { font: inherit; }
+
+      .shell {
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        padding: 26px clamp(18px, 4vw, 64px) 64px;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 28px;
+        animation: arrive 500ms ease-out both;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 760px;
+        font-size: clamp(32px, 5vw, 68px);
+        font-weight: 620;
+        letter-spacing: -0.055em;
+        line-height: 0.98;
+      }
+
+      .lede {
+        max-width: 640px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: clamp(15px, 1.5vw, 18px);
+        line-height: 1.55;
+      }
+
+      .limit-badge {
+        flex: none;
+        margin-top: 3px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .limit-badge strong { color: var(--text); }
+
+      .progress-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        margin: 0 calc(clamp(18px, 4vw, 64px) * -1) 22px;
+        padding: 12px clamp(18px, 4vw, 64px);
+        background: rgba(13, 18, 16, 0.86);
+        border-block: 1px solid rgba(42, 57, 48, 0.7);
+        backdrop-filter: blur(16px);
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+      }
+
+      .step-dot {
+        position: relative;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #647269;
+        cursor: pointer;
+        transition: color 180ms ease, background 180ms ease;
+      }
+
+      .step-dot::after {
+        content: "";
+        position: absolute;
+        right: 8px;
+        bottom: 3px;
+        left: 8px;
+        height: 2px;
+        border-radius: 99px;
+        background: #28342d;
+      }
+
+      .step-dot.done,
+      .step-dot.active { color: var(--text); }
+      .step-dot.done::after { background: #37684c; }
+      .step-dot.active { background: var(--accent-soft); }
+      .step-dot.active::after { background: var(--accent); }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(330px, 0.9fr) minmax(430px, 1.35fr);
+        min-height: 600px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.3);
+        animation: arrive 600ms 80ms ease-out both;
+      }
+
+      .lesson {
+        display: flex;
+        flex-direction: column;
+        padding: clamp(24px, 3.2vw, 46px);
+        border-right: 1px solid var(--line);
+      }
+
+      .step-number {
+        color: var(--accent);
+        font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .lesson h2 {
+        min-height: 2.2em;
+        margin: 18px 0 14px;
+        font-size: clamp(28px, 3.5vw, 48px);
+        font-weight: 610;
+        letter-spacing: -0.045em;
+        line-height: 1.04;
+      }
+
+      .lesson-copy {
+        min-height: 5.2em;
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .takeaway {
+        margin: 26px 0 0;
+        padding-left: 16px;
+        border-left: 2px solid var(--accent);
+        color: #c9d5ce;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .code-panel {
+        margin-top: 28px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #0b100d;
+      }
+
+      .code-label {
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--line);
+        color: #718078;
+        font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      pre {
+        min-height: 112px;
+        margin: 0;
+        padding: 15px;
+        overflow: auto;
+        color: #c8d4cd;
+        font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: auto;
+        padding-top: 28px;
+      }
+
+      .control {
+        min-height: 43px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .control:hover:not(:disabled) { transform: translateY(-1px); border-color: #4b6255; }
+      .control:disabled { cursor: not-allowed; opacity: 0.36; }
+      .control.secondary { width: 44px; }
+      .control.primary {
+        flex: 1;
+        padding: 0 18px;
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #07110b;
+        font-weight: 750;
+      }
+      .control.primary:hover:not(:disabled) { background: #6ee7a2; }
+
+      .database {
+        position: relative;
+        padding: clamp(22px, 3vw, 40px);
+        background:
+          linear-gradient(rgba(84, 223, 145, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(84, 223, 145, 0.025) 1px, transparent 1px),
+          #101713;
+        background-size: 28px 28px;
+      }
+
+      .db-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .db-title { margin: 0; font-size: 15px; font-weight: 700; }
+      .db-subtitle {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+      .legend span { color: var(--muted); font-size: 10px; }
+      .legend i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; }
+      .legend .return i { background: var(--accent); }
+      .legend .peek i { background: var(--amber); }
+      .legend .skip i { background: #59655e; }
+
+      .table-head,
+      .message-row {
+        display: grid;
+        grid-template-columns: 54px minmax(92px, 0.8fr) minmax(80px, 0.65fr) minmax(100px, 1.1fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .table-head {
+        padding: 0 14px 8px;
+        color: #65736b;
+        font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .rows { position: relative; }
+
+      .message-row {
+        position: relative;
+        min-height: 58px;
+        margin-bottom: 8px;
+        padding: 10px 14px;
+        border: 1px solid #27342d;
+        border-radius: 11px;
+        background: rgba(18, 26, 22, 0.9);
+        transition: opacity 280ms ease, transform 280ms ease, border-color 280ms ease, background 280ms ease;
+      }
+
+      .message-row.returned {
+        border-color: rgba(84, 223, 145, 0.7);
+        background: var(--accent-soft);
+        transform: translateX(-5px);
+      }
+
+      .message-row.peek {
+        border-color: rgba(255, 200, 100, 0.72);
+        background: var(--amber-soft);
+        transform: translateX(5px);
+      }
+
+      .message-row.excluded { opacity: 0.28; }
+
+      .message-row.eligible {
+        border-color: rgba(120, 170, 255, 0.48);
+        background: var(--blue-soft);
+      }
+
+      .message-row.final { border-color: rgba(84, 223, 145, 0.7); background: var(--accent-soft); }
+
+      .rank {
+        color: #66746c;
+        font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .time { font: 650 13px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .id { color: #c0ccc5; font: 600 12px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .content { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+      .state-label {
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        padding: 4px 7px;
+        border-radius: 6px;
+        transform: translateY(-50%);
+        opacity: 0;
+        font: 800 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        transition: opacity 220ms ease;
+      }
+      .returned .state-label { opacity: 1; background: var(--accent); color: #07110b; }
+      .peek .state-label { opacity: 1; background: var(--amber); color: #1a1204; }
+      .eligible .state-label { opacity: 1; background: var(--blue); color: #081121; }
+      .excluded .state-label { opacity: 1; background: #39463f; color: #b8c2bc; }
+      .final .state-label { opacity: 1; background: var(--accent); color: #07110b; }
+
+      .cursor-line {
+        position: absolute;
+        right: -10px;
+        left: -10px;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 0;
+        opacity: 0;
+        transition: top 360ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease;
+      }
+
+      .cursor-line.visible { opacity: 1; }
+      .cursor-line::before { content: ""; flex: 1; border-top: 2px dashed var(--accent); }
+      .cursor-line span {
+        flex: none;
+        padding: 5px 8px;
+        border-radius: 7px;
+        background: var(--accent);
+        color: #06120a;
+        font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .response-strip {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .response-item {
+        min-height: 70px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--line);
+        background: rgba(13, 18, 16, 0.68);
+      }
+      .response-item small { display: block; margin-bottom: 8px; color: #68766e; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+      .response-item code { color: #d8e2dc; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      .review {
+        display: grid;
+        grid-template-columns: 0.7fr 1.3fr;
+        gap: clamp(30px, 6vw, 90px);
+        padding: 64px 4px 0;
+      }
+      .review h2 { margin: 0; font-size: clamp(28px, 4vw, 48px); letter-spacing: -0.04em; }
+      .review-copy { margin: 12px 0 0; color: var(--muted); line-height: 1.6; }
+      .invariants { margin: 0; padding: 0; list-style: none; counter-reset: invariant; }
+      .invariants li {
+        counter-increment: invariant;
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 15px;
+        padding: 17px 0;
+        border-top: 1px solid var(--line);
+        color: #cbd6d0;
+        line-height: 1.55;
+      }
+      .invariants li::before { content: "0" counter(invariant); color: var(--accent); font: 700 11px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .invariants strong { color: var(--text); }
+
+      .kbd { color: #6f7d75; font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      @keyframes arrive {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (max-width: 900px) {
+        header { display: block; }
+        .limit-badge { display: inline-block; margin-top: 18px; }
+        .workspace { grid-template-columns: 1fr; }
+        .lesson { border-right: 0; border-bottom: 1px solid var(--line); }
+        .lesson h2, .lesson-copy { min-height: 0; }
+        .database { min-height: 610px; }
+        .review { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 570px) {
+        .shell { padding-inline: 12px; }
+        .progress-wrap { margin-inline: -12px; padding-inline: 12px; }
+        .step-dot { font-size: 0; }
+        .step-dot::before { content: attr(data-short); font-size: 10px; }
+        .database { padding: 18px 12px; }
+        .db-head { display: block; }
+        .legend { justify-content: flex-start; margin-top: 13px; }
+        .table-head, .message-row { grid-template-columns: 38px 76px 54px 1fr; gap: 7px; }
+        .message-row { padding-inline: 9px; }
+        .state-label { right: 7px; }
+        .response-strip { grid-template-columns: 1fr; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">Event Chat · Code review companion</p>
+          <h1>Follow the cursor,<br />one page at a time.</h1>
+          <p class="lede">A concrete simulation of the repository’s newest-first message query. Nothing is hidden: every row, comparison, and look-ahead is visible.</p>
+        </div>
+        <div class="limit-badge">PAGE LIMIT&nbsp; <strong>2</strong></div>
+      </header>
+
+      <nav class="progress-wrap" aria-label="Walkthrough steps">
+        <div class="steps" id="steps"></div>
+      </nav>
+
+      <section class="workspace" aria-live="polite">
+        <article class="lesson">
+          <div class="step-number" id="stepNumber">Step 1 of 6</div>
+          <h2 id="stepTitle">Start with one stable order.</h2>
+          <p class="lesson-copy" id="stepCopy"></p>
+          <p class="takeaway" id="takeaway"></p>
+
+          <div class="code-panel">
+            <div class="code-label" id="codeLabel">Repository query</div>
+            <pre id="code"></pre>
+          </div>
+
+          <div class="controls">
+            <button class="control secondary" id="prev" aria-label="Previous step">←</button>
+            <button class="control primary" id="next">Next step</button>
+            <button class="control secondary" id="replay" aria-label="Restart walkthrough">↻</button>
+          </div>
+          <p class="kbd">Tip: use ← and → on your keyboard</p>
+        </article>
+
+        <article class="database">
+          <div class="db-head">
+            <div>
+              <h3 class="db-title">messages · conversation A</h3>
+              <p class="db-subtitle">ORDER BY created_at DESC, id DESC</p>
+            </div>
+            <div class="legend" aria-label="Row state legend">
+              <span class="return"><i></i>returned</span>
+              <span class="peek"><i></i>look-ahead</span>
+              <span class="skip"><i></i>behind cursor</span>
+            </div>
+          </div>
+
+          <div class="table-head" aria-hidden="true">
+            <span>Order</span><span>created_at</span><span>id</span><span>content</span>
+          </div>
+          <div class="rows" id="rows">
+            <div class="cursor-line" id="cursorLine"><span>cursor boundary</span></div>
+          </div>
+
+          <div class="response-strip">
+            <div class="response-item"><small>API data</small><code id="apiData">—</code></div>
+            <div class="response-item"><small>nextCursor decodes to</small><code id="apiCursor">—</code></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="review">
+        <div>
+          <p class="eyebrow">The review shortcut</p>
+          <h2>Three pieces must agree.</h2>
+          <p class="review-copy">If these invariants stay aligned, the pagination does not skip or duplicate messages—even when timestamps tie.</p>
+        </div>
+        <ol class="invariants">
+          <li><span><strong>Sort:</strong> newest first by <code>createdAt DESC</code>, then <code>id DESC</code>.</span></li>
+          <li><span><strong>Cursor:</strong> store both fields from the oldest row actually returned—not from the extra row.</span></li>
+          <li><span><strong>Next query:</strong> use strict “less than” comparisons in the same field order as the sort.</span></li>
+        </ol>
+      </section>
+    </main>
+
+    <script>
+      const messages = [
+        { key: "M5", time: "10:05:00", id: "…00C", content: "Newest tied message" },
+        { key: "M4", time: "10:05:00", id: "…00B", content: "Page-one boundary" },
+        { key: "M3", time: "10:05:00", id: "…00A", content: "Same time, lower ID" },
+        { key: "M2", time: "10:04:00", id: "…00F", content: "An older message" },
+        { key: "M1", time: "10:03:00", id: "…00D", content: "Oldest message" },
+      ];
+
+      const walkthrough = [
+        {
+          nav: "Stable order",
+          title: "Start with one stable order.",
+          copy: "Messages are sorted newest-first. createdAt is the primary key for ordering; id is the tie-breaker when several messages share exactly the same timestamp.",
+          takeaway: "The cursor must contain every field needed to identify one exact position in this order.",
+          label: "Repository query",
+          code: "ORDER BY created_at DESC, id DESC\nLIMIT pageSize",
+          states: ["", "", "", "", ""],
+          data: "—",
+          cursor: "—",
+          boundary: null,
+        },
+        {
+          nav: "Fetch 3",
+          title: "Ask for limit + 1.",
+          copy: "The requested limit is 2, but the service asks the repository for 3 rows. The third row is only a look-ahead: its presence proves that an older page exists.",
+          takeaway: "No COUNT query is needed. One extra row answers the only question we have: is there more?",
+          label: "messages.service.ts",
+          code: "repository.findPage(\n  conversationId,\n  undefined,\n  query.limit + 1 // 3\n)",
+          states: ["returned", "returned", "peek", "", ""],
+          data: "not returned yet",
+          cursor: "not created yet",
+          boundary: null,
+        },
+        {
+          nav: "Return page 1",
+          title: "Return two. Bookmark M4.",
+          copy: "M5 and M4 become page one. M3 is removed from this response. Because the extra row existed, nextCursor is made from M4—the oldest row actually returned.",
+          takeaway: "Bookmark M4, not M3. The next query is exclusive, so it will naturally begin with M3.",
+          label: "Page-one response",
+          code: "data: [M5, M4]\nnextCursor: encode({\n  createdAt: M4.createdAt,\n  id: M4.id\n})",
+          states: ["returned", "returned", "", "", ""],
+          data: "[M5, M4]",
+          cursor: "{ time: 10:05, id: …00B }",
+          boundary: 1,
+        },
+        {
+          nav: "Apply cursor",
+          title: "Continue strictly after M4.",
+          copy: "The client sends nextCursor back. The server decodes it, then filters for a timestamp older than M4—or the same timestamp with a smaller ID.",
+          takeaway: "M5 and M4 are now behind the boundary. M3 still qualifies because its timestamp ties but its ID is smaller.",
+          label: "Cursor condition",
+          code: "created_at < '10:05'\nOR (\n  created_at = '10:05'\n  AND id < '…00B'\n)",
+          states: ["excluded", "excluded", "eligible", "eligible", "eligible"],
+          data: "previous: [M5, M4]",
+          cursor: "{ time: 10:05, id: …00B }",
+          boundary: 1,
+        },
+        {
+          nav: "Return page 2",
+          title: "The tie-breaker prevents a skip.",
+          copy: "The repository returns M3, M2, and look-ahead M1. The API sends [M3, M2] and creates a new cursor from M2.",
+          takeaway: "A timestamp-only cursor would have skipped M3. The ID is what carries us safely through the timestamp tie.",
+          label: "Page-two response",
+          code: "database: [M3, M2, M1]\ndata: [M3, M2]\nnextCursor: cursorFor(M2)",
+          states: ["excluded", "excluded", "returned", "returned", "peek"],
+          data: "[M3, M2]",
+          cursor: "{ time: 10:04, id: …00F }",
+          boundary: 3,
+        },
+        {
+          nav: "Finish",
+          title: "One row left. Cursor becomes null.",
+          copy: "The final query finds only M1—not limit + 1 rows. hasMore is false, so M1 is returned with nextCursor: null. The client stops showing “Load earlier.”",
+          takeaway: "Combined API order is [M5, M4, M3, M2, M1]. The UI reverses it once for oldest-to-newest chat display.",
+          label: "Final response",
+          code: "rows.length > limit // 1 > 2 → false\n\ndata: [M1]\nnextCursor: null",
+          states: ["excluded", "excluded", "excluded", "excluded", "final"],
+          data: "[M1]",
+          cursor: "null · pagination complete",
+          boundary: 4,
+        },
+      ];
+
+      const rows = document.querySelector("#rows");
+      const cursorLine = document.querySelector("#cursorLine");
+      const stateLabels = { returned: "return", peek: "+1 peek", eligible: "eligible", excluded: "past", final: "return" };
+
+      messages.forEach((message, index) => {
+        const row = document.createElement("div");
+        row.className = "message-row";
+        row.dataset.index = index;
+        row.innerHTML = `
+          <span class="rank">${message.key}</span>
+          <span class="time">${message.time}</span>
+          <span class="id">${message.id}</span>
+          <span class="content">${message.content}</span>
+          <span class="state-label"></span>`;
+        rows.appendChild(row);
+      });
+
+      const steps = document.querySelector("#steps");
+      walkthrough.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.className = "step-dot";
+        button.dataset.short = String(index + 1).padStart(2, "0");
+        button.textContent = `${index + 1}. ${item.nav}`;
+        button.addEventListener("click", () => render(index));
+        steps.appendChild(button);
+      });
+
+      let current = 0;
+
+      function placeCursor(boundary) {
+        if (boundary === null) {
+          cursorLine.classList.remove("visible");
+          return;
+        }
+        const row = rows.querySelector(`[data-index="${boundary}"]`);
+        cursorLine.style.top = `${row.offsetTop + row.offsetHeight + 4}px`;
+        cursorLine.classList.add("visible");
+      }
+
+      function render(index) {
+        current = Math.max(0, Math.min(index, walkthrough.length - 1));
+        const item = walkthrough[current];
+        document.querySelector("#stepNumber").textContent = `Step ${current + 1} of ${walkthrough.length}`;
+        document.querySelector("#stepTitle").textContent = item.title;
+        document.querySelector("#stepCopy").textContent = item.copy;
+        document.querySelector("#takeaway").textContent = item.takeaway;
+        document.querySelector("#codeLabel").textContent = item.label;
+        document.querySelector("#code").textContent = item.code;
+        document.querySelector("#apiData").textContent = item.data;
+        document.querySelector("#apiCursor").textContent = item.cursor;
+
+        rows.querySelectorAll(".message-row").forEach((row, rowIndex) => {
+          row.className = `message-row ${item.states[rowIndex]}`.trim();
+          row.querySelector(".state-label").textContent = stateLabels[item.states[rowIndex]] || "";
+        });
+
+        steps.querySelectorAll("button").forEach((button, stepIndex) => {
+          button.classList.toggle("active", stepIndex === current);
+          button.classList.toggle("done", stepIndex < current);
+          button.setAttribute("aria-current", stepIndex === current ? "step" : "false");
+        });
+
+        document.querySelector("#prev").disabled = current === 0;
+        const next = document.querySelector("#next");
+        next.disabled = current === walkthrough.length - 1;
+        next.textContent = current === walkthrough.length - 2 ? "Finish walkthrough" : "Next step";
+        requestAnimationFrame(() => placeCursor(item.boundary));
+      }
+
+      document.querySelector("#prev").addEventListener("click", () => render(current - 1));
+      document.querySelector("#next").addEventListener("click", () => render(current + 1));
+      document.querySelector("#replay").addEventListener("click", () => render(0));
+      window.addEventListener("resize", () => placeCursor(walkthrough[current].boundary));
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight") render(current + 1);
+        if (event.key === "ArrowLeft") render(current - 1);
+      });
+
+      render(0);
+    </script>
+  </body>
+</html>

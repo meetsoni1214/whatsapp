@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>
+            Presence lifecycle — interactive implementation walkthrough
+        </title>
+        <link rel="icon" href="data:," />
+        <style>
+            :root {
+                color-scheme: dark;
+                --bg: #07100c;
+                --surface: #0c1711;
+                --surface-raised: #111e17;
+                --line: #25382d;
+                --line-strong: #3b5847;
+                --text: #eef6f1;
+                --muted: #8da096;
+                --faint: #576b60;
+                --accent: #58e391;
+                --accent-soft: rgba(88, 227, 145, 0.12);
+                --amber: #f2c76d;
+                --amber-soft: rgba(242, 199, 109, 0.12);
+                --danger: #ff8d84;
+                --mono:
+                    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                --sans:
+                    Inter, ui-sans-serif, system-ui, -apple-system,
+                    BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+            html {
+                scroll-behavior: smooth;
+            }
+            body {
+                margin: 0;
+                min-width: 320px;
+                background:
+                    radial-gradient(
+                        circle at 82% -10%,
+                        rgba(88, 227, 145, 0.12),
+                        transparent 32rem
+                    ),
+                    linear-gradient(
+                        rgba(255, 255, 255, 0.018) 1px,
+                        transparent 1px
+                    ),
+                    var(--bg);
+                background-size:
+                    auto,
+                    100% 4.5rem,
+                    auto;
+                color: var(--text);
+                font-family: var(--sans);
+            }
+            button {
+                color: inherit;
+                font: inherit;
+            }
+            code,
+            pre,
+            .mono {
+                font-family: var(--mono);
+            }
+            a {
+                color: inherit;
+            }
+
+            .shell {
+                width: min(1540px, 100%);
+                margin: 0 auto;
+                padding: 28px clamp(18px, 4vw, 66px) 90px;
+            }
+
+            .hero {
+                position: relative;
+                min-height: 280px;
+                padding: clamp(18px, 4vw, 54px) 0 42px;
+                overflow: hidden;
+                animation: arrive 620ms ease-out both;
+            }
+            .hero::after {
+                position: absolute;
+                top: 10px;
+                right: 0;
+                width: min(35vw, 420px);
+                aspect-ratio: 1;
+                border: 1px solid rgba(88, 227, 145, 0.18);
+                border-radius: 50%;
+                box-shadow:
+                    inset 0 0 80px rgba(88, 227, 145, 0.04),
+                    0 0 80px rgba(88, 227, 145, 0.04);
+                content: "";
+                transform: translate(18%, -30%);
+            }
+            .hero-mark {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 20px;
+                color: var(--accent);
+                font: 750 10px/1 var(--mono);
+                letter-spacing: 0.18em;
+                text-transform: uppercase;
+            }
+            .hero-mark::before {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--accent);
+                box-shadow: 0 0 20px var(--accent);
+                content: "";
+                animation: breathe 2.4s ease-in-out infinite;
+            }
+            h1 {
+                max-width: 940px;
+                margin: 0;
+                font-size: clamp(43px, 7vw, 96px);
+                font-weight: 610;
+                letter-spacing: -0.068em;
+                line-height: 0.9;
+            }
+            .lede {
+                max-width: 680px;
+                margin: 25px 0 0;
+                color: var(--muted);
+                font-size: clamp(14px, 1.4vw, 18px);
+                line-height: 1.65;
+            }
+
+            .progress {
+                position: sticky;
+                top: 0;
+                z-index: 30;
+                margin-inline: calc(clamp(18px, 4vw, 66px) * -1);
+                padding: 11px clamp(18px, 4vw, 66px);
+                border-block: 1px solid rgba(37, 56, 45, 0.8);
+                background: rgba(7, 16, 12, 0.88);
+                backdrop-filter: blur(18px);
+            }
+            .step-rail {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 7px;
+            }
+            .step-button {
+                position: relative;
+                min-height: 43px;
+                padding: 0 8px 8px;
+                border: 0;
+                background: transparent;
+                color: var(--faint);
+                cursor: pointer;
+                font-size: 10px;
+                transition:
+                    color 180ms ease,
+                    background 180ms ease;
+            }
+            .step-button::after {
+                position: absolute;
+                right: 8px;
+                bottom: 3px;
+                left: 8px;
+                height: 2px;
+                border-radius: 99px;
+                background: #203128;
+                content: "";
+            }
+            .step-button.done {
+                color: #91a79b;
+            }
+            .step-button.done::after {
+                background: #376549;
+            }
+            .step-button.active {
+                background: var(--accent-soft);
+                color: var(--text);
+            }
+            .step-button.active::after {
+                background: var(--accent);
+            }
+
+            .workspace {
+                display: grid;
+                grid-template-columns: minmax(300px, 0.76fr) minmax(
+                        620px,
+                        1.5fr
+                    );
+                min-height: 680px;
+                margin-top: 22px;
+                overflow: hidden;
+                border: 1px solid var(--line);
+                background: var(--surface);
+                box-shadow: 0 34px 90px rgba(0, 0, 0, 0.3);
+                animation: arrive 700ms 80ms ease-out both;
+            }
+            .lesson {
+                display: flex;
+                flex-direction: column;
+                padding: clamp(26px, 3.7vw, 52px);
+                border-right: 1px solid var(--line);
+            }
+            .lesson-index {
+                color: var(--accent);
+                font: 750 10px/1 var(--mono);
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+            }
+            .lesson h2 {
+                min-height: 2em;
+                margin: 22px 0 16px;
+                font-size: clamp(31px, 3.5vw, 52px);
+                font-weight: 610;
+                letter-spacing: -0.052em;
+                line-height: 1.02;
+            }
+            .lesson-copy {
+                min-height: 7.5em;
+                margin: 0;
+                color: var(--muted);
+                font-size: 15px;
+                line-height: 1.7;
+            }
+            .invariant {
+                margin: 25px 0 0;
+                padding-left: 16px;
+                border-left: 2px solid var(--accent);
+                color: #c9d8d0;
+                font-size: 13px;
+                line-height: 1.55;
+            }
+            .code-frame {
+                margin-top: 28px;
+                border-block: 1px solid var(--line);
+                background: #070e0a;
+            }
+            .frame-label {
+                padding: 10px 13px;
+                border-bottom: 1px solid var(--line);
+                color: #667b6e;
+                font: 750 9px/1 var(--mono);
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+            }
+            pre {
+                min-height: 145px;
+                margin: 0;
+                padding: 16px;
+                overflow: auto;
+                color: #cbd9d1;
+                font-size: 11px;
+                line-height: 1.62;
+                white-space: pre-wrap;
+            }
+            .controls {
+                display: flex;
+                gap: 8px;
+                margin-top: auto;
+                padding-top: 30px;
+            }
+            .control {
+                min-height: 42px;
+                padding: 0 17px;
+                border: 1px solid var(--line-strong);
+                background: transparent;
+                cursor: pointer;
+                font-size: 11px;
+                transition:
+                    border-color 160ms ease,
+                    background 160ms ease,
+                    transform 160ms ease;
+            }
+            .control:hover:not(:disabled) {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+                transform: translateY(-1px);
+            }
+            .control.primary {
+                border-color: var(--accent);
+                background: var(--accent);
+                color: #062011;
+                font-weight: 750;
+            }
+            .control:disabled {
+                cursor: default;
+                opacity: 0.35;
+            }
+
+            .stage {
+                position: relative;
+                display: grid;
+                grid-template-rows: auto 1fr auto;
+                min-width: 0;
+                padding: clamp(24px, 3vw, 44px);
+                background:
+                    linear-gradient(
+                        90deg,
+                        transparent 49.9%,
+                        rgba(88, 227, 145, 0.035) 50%,
+                        transparent 50.1%
+                    ),
+                    var(--surface-raised);
+            }
+            .stage-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 18px;
+                padding-bottom: 24px;
+                border-bottom: 1px solid var(--line);
+            }
+            .stage-head span {
+                color: var(--muted);
+                font: 650 10px/1 var(--mono);
+                letter-spacing: 0.11em;
+                text-transform: uppercase;
+            }
+            .system-status {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: var(--accent) !important;
+            }
+            .system-status::before {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: currentColor;
+                content: "";
+            }
+
+            .system-map {
+                position: relative;
+                display: grid;
+                grid-template-columns: 1fr 0.9fr 1fr;
+                gap: clamp(22px, 4vw, 64px);
+                align-items: center;
+                min-height: 390px;
+                padding: 34px 0;
+            }
+            .lane {
+                position: relative;
+                z-index: 2;
+                display: grid;
+                gap: 12px;
+            }
+            .lane-label {
+                margin-bottom: 6px;
+                color: var(--faint);
+                font: 750 9px/1 var(--mono);
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+            }
+            .node {
+                position: relative;
+                min-height: 72px;
+                padding: 16px;
+                border: 1px solid var(--line);
+                background: #0a130e;
+                transition:
+                    border-color 220ms ease,
+                    background 220ms ease,
+                    opacity 220ms ease,
+                    transform 220ms ease;
+            }
+            .node.active {
+                border-color: rgba(88, 227, 145, 0.7);
+                background: var(--accent-soft);
+                transform: translateY(-2px);
+            }
+            .node.dim {
+                opacity: 0.43;
+            }
+            .node-name {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                color: var(--text);
+                font-size: 12px;
+                font-weight: 700;
+            }
+            .node-state {
+                margin-top: 10px;
+                color: var(--muted);
+                font: 600 10px/1.4 var(--mono);
+            }
+            .session-led {
+                width: 7px;
+                height: 7px;
+                margin-top: 2px;
+                border-radius: 50%;
+                background: #3a4b42;
+                transition:
+                    background 200ms ease,
+                    box-shadow 200ms ease;
+            }
+            .node.active .session-led {
+                background: var(--accent);
+                box-shadow: 0 0 14px rgba(88, 227, 145, 0.75);
+            }
+            .registry {
+                min-height: 154px;
+                text-align: center;
+            }
+            .count {
+                display: block;
+                margin: 17px 0 4px;
+                color: var(--accent);
+                font: 560 clamp(50px, 6vw, 82px)/0.86 var(--mono);
+                letter-spacing: -0.08em;
+                transition: transform 240ms ease;
+            }
+            .count.bump {
+                animation: bump 360ms ease;
+            }
+            .revision {
+                color: var(--muted);
+                font: 650 10px/1 var(--mono);
+            }
+            .database-node {
+                border-color: rgba(242, 199, 109, 0.4);
+            }
+            .database-node.active {
+                border-color: var(--amber);
+                background: var(--amber-soft);
+            }
+            .database-node .node-state {
+                color: var(--amber);
+            }
+            .peer-node .presence-copy {
+                margin-top: 13px;
+                color: var(--muted);
+                font-size: 13px;
+            }
+            .peer-node.active .presence-copy {
+                color: var(--accent);
+            }
+
+            .flow {
+                position: absolute;
+                z-index: 1;
+                top: 50%;
+                left: 12%;
+                width: 76%;
+                height: 1px;
+                background: linear-gradient(
+                    90deg,
+                    var(--line),
+                    var(--line-strong),
+                    var(--line)
+                );
+            }
+            .pulse {
+                position: absolute;
+                z-index: 3;
+                top: calc(50% - 4px);
+                left: 18%;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--accent);
+                box-shadow: 0 0 22px var(--accent);
+                opacity: 0;
+            }
+            .pulse.to-peer {
+                animation: toPeer 900ms ease both;
+            }
+            .pulse.to-db {
+                background: var(--amber);
+                box-shadow: 0 0 22px var(--amber);
+                animation: toDatabase 900ms ease both;
+            }
+            .pulse.suppressed {
+                background: var(--danger);
+                box-shadow: 0 0 22px var(--danger);
+                animation: suppressed 900ms ease both;
+            }
+
+            .state-strip {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                border-top: 1px solid var(--line);
+            }
+            .metric {
+                min-width: 0;
+                padding: 18px 15px 4px 0;
+            }
+            .metric + .metric {
+                padding-left: 15px;
+                border-left: 1px solid var(--line);
+            }
+            .metric-label {
+                display: block;
+                color: var(--faint);
+                font: 700 8px/1 var(--mono);
+                letter-spacing: 0.13em;
+                text-transform: uppercase;
+            }
+            .metric-value {
+                display: block;
+                margin-top: 8px;
+                overflow: hidden;
+                color: var(--text);
+                font: 650 11px/1.35 var(--mono);
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .metric-value.good {
+                color: var(--accent);
+            }
+            .metric-value.warm {
+                color: var(--amber);
+            }
+
+            .section {
+                padding: clamp(68px, 9vw, 130px) 0 0;
+            }
+            .section-kicker {
+                margin: 0 0 15px;
+                color: var(--accent);
+                font: 750 10px/1 var(--mono);
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+            }
+            .section h2 {
+                max-width: 880px;
+                margin: 0;
+                font-size: clamp(35px, 5.3vw, 72px);
+                font-weight: 610;
+                letter-spacing: -0.058em;
+                line-height: 0.98;
+            }
+            .section-intro {
+                max-width: 650px;
+                margin: 22px 0 0;
+                color: var(--muted);
+                line-height: 1.7;
+            }
+
+            .state-comparison {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                margin-top: 46px;
+                border-block: 1px solid var(--line);
+            }
+            .state-column {
+                padding: clamp(30px, 4vw, 52px) 0;
+            }
+            .state-column + .state-column {
+                padding-left: clamp(30px, 4vw, 52px);
+                border-left: 1px solid var(--line);
+            }
+            .state-column:first-child {
+                padding-right: clamp(30px, 4vw, 52px);
+            }
+            .state-column h3 {
+                margin: 0;
+                font-size: 22px;
+                font-weight: 620;
+            }
+            .state-column p {
+                margin: 12px 0 24px;
+                color: var(--muted);
+                line-height: 1.65;
+            }
+            .fact-list {
+                display: grid;
+                gap: 12px;
+            }
+            .fact {
+                display: grid;
+                grid-template-columns: 84px 1fr;
+                gap: 18px;
+                padding-top: 12px;
+                border-top: 1px solid rgba(37, 56, 45, 0.7);
+                color: #c5d3cb;
+                font-size: 12px;
+                line-height: 1.5;
+            }
+            .fact strong {
+                color: var(--faint);
+                font: 700 9px/1.5 var(--mono);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .race {
+                display: grid;
+                grid-template-columns: 0.8fr 1.2fr;
+                gap: clamp(36px, 7vw, 100px);
+                align-items: center;
+                margin-top: 46px;
+                padding: clamp(36px, 5vw, 68px);
+                border: 1px solid var(--line);
+                background: #0a140e;
+            }
+            .race-copy h3 {
+                margin: 0 0 15px;
+                font-size: 28px;
+                letter-spacing: -0.035em;
+            }
+            .race-copy p {
+                margin: 0;
+                color: var(--muted);
+                line-height: 1.7;
+            }
+            .race-timeline {
+                display: grid;
+                gap: 5px;
+            }
+            .race-row {
+                display: grid;
+                grid-template-columns: 58px 1fr auto;
+                align-items: center;
+                gap: 14px;
+                min-height: 48px;
+                border-bottom: 1px solid var(--line);
+                font: 600 10px/1.4 var(--mono);
+            }
+            .race-row .rev {
+                color: var(--accent);
+            }
+            .race-row .result {
+                color: var(--muted);
+            }
+            .race-row.blocked .result {
+                color: var(--danger);
+            }
+
+            .implementation {
+                display: grid;
+                grid-template-columns: 0.78fr 1.22fr;
+                gap: clamp(40px, 8vw, 120px);
+                margin-top: 48px;
+            }
+            .path-list {
+                border-top: 1px solid var(--line);
+            }
+            .path {
+                display: grid;
+                grid-template-columns: 34px 1fr;
+                gap: 15px;
+                padding: 19px 0;
+                border-bottom: 1px solid var(--line);
+            }
+            .path-number {
+                color: var(--accent);
+                font: 700 10px/1.5 var(--mono);
+            }
+            .path strong {
+                display: block;
+                font-size: 13px;
+            }
+            .path span {
+                display: block;
+                margin-top: 5px;
+                color: var(--muted);
+                font-size: 12px;
+                line-height: 1.5;
+            }
+            .contract {
+                overflow: hidden;
+                border-block: 1px solid var(--line);
+                background: #070e0a;
+            }
+            .contract pre {
+                min-height: 0;
+                font-size: 12px;
+            }
+            .accent-code {
+                color: var(--accent);
+            }
+            .amber-code {
+                color: var(--amber);
+            }
+
+            .verify {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                margin-top: 46px;
+                border-block: 1px solid var(--line);
+            }
+            .verify-item {
+                padding: 28px 26px 28px 0;
+            }
+            .verify-item + .verify-item {
+                padding-left: 26px;
+                border-left: 1px solid var(--line);
+            }
+            .verify-item strong {
+                display: block;
+                font-size: 13px;
+            }
+            .verify-item span {
+                display: block;
+                margin-top: 8px;
+                color: var(--muted);
+                font-size: 12px;
+                line-height: 1.55;
+            }
+            footer {
+                display: flex;
+                justify-content: space-between;
+                gap: 24px;
+                margin-top: 90px;
+                padding-top: 24px;
+                border-top: 1px solid var(--line);
+                color: var(--faint);
+                font: 650 10px/1.5 var(--mono);
+            }
+
+            @keyframes arrive {
+                from {
+                    opacity: 0;
+                    transform: translateY(14px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes breathe {
+                50% {
+                    opacity: 0.45;
+                    transform: scale(0.76);
+                }
+            }
+            @keyframes bump {
+                50% {
+                    transform: scale(1.1);
+                }
+            }
+            @keyframes toPeer {
+                0% {
+                    left: 18%;
+                    opacity: 0;
+                }
+                12%,
+                82% {
+                    opacity: 1;
+                }
+                100% {
+                    left: 83%;
+                    opacity: 0;
+                }
+            }
+            @keyframes toDatabase {
+                0% {
+                    left: 47%;
+                    top: 48%;
+                    opacity: 0;
+                }
+                15%,
+                80% {
+                    opacity: 1;
+                }
+                100% {
+                    left: 77%;
+                    top: 69%;
+                    opacity: 0;
+                }
+            }
+            @keyframes suppressed {
+                0% {
+                    left: 76%;
+                    opacity: 0;
+                }
+                15%,
+                58% {
+                    opacity: 1;
+                }
+                72% {
+                    transform: scale(1);
+                }
+                100% {
+                    left: 54%;
+                    opacity: 0;
+                    transform: scale(0);
+                }
+            }
+
+            @media (max-width: 980px) {
+                .workspace {
+                    grid-template-columns: 1fr;
+                }
+                .lesson {
+                    border-right: 0;
+                    border-bottom: 1px solid var(--line);
+                }
+                .lesson h2,
+                .lesson-copy {
+                    min-height: 0;
+                }
+                .stage {
+                    min-height: 660px;
+                }
+                .implementation,
+                .race {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 700px) {
+                .shell {
+                    padding-top: 16px;
+                }
+                .hero {
+                    min-height: 240px;
+                }
+                .step-rail {
+                    display: flex;
+                    overflow-x: auto;
+                }
+                .step-button {
+                    min-width: 84px;
+                }
+                .system-map {
+                    grid-template-columns: 1fr;
+                    gap: 14px;
+                }
+                .flow,
+                .pulse {
+                    display: none;
+                }
+                .registry {
+                    min-height: 120px;
+                }
+                .stage {
+                    min-height: 860px;
+                }
+                .state-strip {
+                    grid-template-columns: 1fr 1fr;
+                }
+                .metric:nth-child(3) {
+                    border-left: 0;
+                }
+                .state-comparison,
+                .verify {
+                    grid-template-columns: 1fr;
+                }
+                .state-column + .state-column,
+                .verify-item + .verify-item {
+                    padding-left: 0;
+                    border-left: 0;
+                    border-top: 1px solid var(--line);
+                }
+                .state-column:first-child {
+                    padding-right: 0;
+                }
+                footer {
+                    flex-direction: column;
+                }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                *,
+                *::before,
+                *::after {
+                    scroll-behavior: auto !important;
+                    animation-duration: 1ms !important;
+                    animation-iteration-count: 1 !important;
+                    transition-duration: 1ms !important;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="shell">
+            <header class="hero">
+                <div class="hero-mark">Event Chat · implementation lab</div>
+                <h1>Presence is a count before it is a timestamp.</h1>
+                <p class="lede">
+                    Walk through the implemented single-instance lifecycle: HTTP
+                    provides the initial truth, WebSockets stream changes, and
+                    only the final session disconnect becomes durable last-seen
+                    state.
+                </p>
+            </header>
+
+            <nav class="progress" aria-label="Presence lifecycle steps">
+                <div class="step-rail" id="stepRail"></div>
+            </nav>
+
+            <section class="workspace" aria-labelledby="lessonTitle">
+                <article class="lesson">
+                    <span class="lesson-index" id="lessonIndex"
+                        >Step 01 / 07</span
+                    >
+                    <h2 id="lessonTitle">Load the initial snapshot</h2>
+                    <p class="lesson-copy" id="lessonCopy"></p>
+                    <p class="invariant" id="invariant"></p>
+                    <div class="code-frame">
+                        <div class="frame-label" id="frameLabel">
+                            HTTP response
+                        </div>
+                        <pre id="frameCode"></pre>
+                    </div>
+                    <div class="controls">
+                        <button
+                            class="control"
+                            id="previousButton"
+                            type="button"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            class="control primary"
+                            id="nextButton"
+                            type="button"
+                        >
+                            Next step
+                        </button>
+                        <button class="control" id="resetButton" type="button">
+                            Reset
+                        </button>
+                    </div>
+                </article>
+
+                <div class="stage" aria-live="polite">
+                    <div class="stage-head">
+                        <span>Single API instance · live state</span>
+                        <span class="system-status" id="systemStatus"
+                            >Snapshot loaded</span
+                        >
+                    </div>
+
+                    <div class="system-map">
+                        <div class="flow" aria-hidden="true"></div>
+                        <div class="pulse" id="pulse" aria-hidden="true"></div>
+
+                        <div class="lane">
+                            <span class="lane-label"
+                                >Alice · browser sessions</span
+                            >
+                            <div class="node dim" id="tabOne">
+                                <div class="node-name">
+                                    Primary tab
+                                    <span class="session-led"></span>
+                                </div>
+                                <div class="node-state" id="tabOneState">
+                                    disconnected
+                                </div>
+                            </div>
+                            <div class="node dim" id="tabTwo">
+                                <div class="node-name">
+                                    Secondary tab
+                                    <span class="session-led"></span>
+                                </div>
+                                <div class="node-state" id="tabTwoState">
+                                    disconnected
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="lane">
+                            <span class="lane-label">NestJS · memory</span>
+                            <div class="node registry" id="registryNode">
+                                <div class="node-name">
+                                    Connection registry <span>ephemeral</span>
+                                </div>
+                                <strong class="count" id="connectionCount"
+                                    >0</strong
+                                >
+                                <span class="revision" id="revision"
+                                    >revision 0</span
+                                >
+                            </div>
+                        </div>
+
+                        <div class="lane">
+                            <span class="lane-label">Durable + observable</span>
+                            <div class="node database-node" id="databaseNode">
+                                <div class="node-name">
+                                    PostgreSQL <span>durable</span>
+                                </div>
+                                <div class="node-state" id="databaseState">
+                                    last_seen_at = null
+                                </div>
+                            </div>
+                            <div class="node peer-node" id="peerNode">
+                                <div class="node-name">
+                                    Bob's conversation
+                                    <span>authorized peer</span>
+                                </div>
+                                <div class="presence-copy" id="peerState">
+                                    Offline
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="state-strip">
+                        <div class="metric">
+                            <span class="metric-label">Online source</span>
+                            <span class="metric-value" id="onlineSource"
+                                >HTTP snapshot</span
+                            >
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Registry</span>
+                            <span class="metric-value good" id="registryState"
+                                >offline</span
+                            >
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Database</span>
+                            <span class="metric-value warm" id="lastSeenState"
+                                >null</span
+                            >
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Emission</span>
+                            <span class="metric-value" id="emissionState"
+                                >none</span
+                            >
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section" id="state-boundary">
+                <p class="section-kicker">The core boundary</p>
+                <h2>Online is ephemeral. Last seen is durable.</h2>
+                <p class="section-intro">
+                    The system deliberately refuses to make PostgreSQL answer a
+                    question owned by the active process. Each store carries
+                    only the state it can represent correctly.
+                </p>
+                <div class="state-comparison">
+                    <article class="state-column">
+                        <h3>In-memory connection registry</h3>
+                        <p>
+                            Answers whether at least one authenticated WebSocket
+                            exists right now.
+                        </p>
+                        <div class="fact-list">
+                            <div class="fact">
+                                <strong>Stores</strong
+                                ><span
+                                    >Socket sets, per-user counts, transition
+                                    revisions.</span
+                                >
+                            </div>
+                            <div class="fact">
+                                <strong>Changes</strong
+                                ><span
+                                    >On authentication, close, heartbeat
+                                    termination, and token expiry.</span
+                                >
+                            </div>
+                            <div class="fact">
+                                <strong>Loss</strong
+                                ><span
+                                    >Expected on restart. With one API instance,
+                                    the empty registry correctly means
+                                    offline.</span
+                                >
+                            </div>
+                        </div>
+                    </article>
+                    <article class="state-column">
+                        <h3>PostgreSQL users table</h3>
+                        <p>
+                            Records the most recent durable moment when the
+                            final session went away.
+                        </p>
+                        <div class="fact-list">
+                            <div class="fact">
+                                <strong>Stores</strong
+                                ><span
+                                    >One monotonic last_seen_at timestamp per
+                                    user.</span
+                                >
+                            </div>
+                            <div class="fact">
+                                <strong>Changes</strong
+                                ><span
+                                    >Only after the final authenticated
+                                    connection closes.</span
+                                >
+                            </div>
+                            <div class="fact">
+                                <strong>Recovery</strong
+                                ><span
+                                    >Conversation HTTP responses combine this
+                                    timestamp with the live registry.</span
+                                >
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="section">
+                <p class="section-kicker">Race protection</p>
+                <h2>Async work must not publish yesterday's state.</h2>
+                <div class="race">
+                    <div class="race-copy">
+                        <h3>The reconnect race</h3>
+                        <p>
+                            A database update and peer lookup both await I/O.
+                            Alice can reconnect while they are running. Every
+                            first/final transition receives a revision; the
+                            service checks it again immediately before
+                            broadcast.
+                        </p>
+                    </div>
+                    <div
+                        class="race-timeline"
+                        aria-label="Transition revision timeline"
+                    >
+                        <div class="race-row">
+                            <span class="rev">rev 1</span
+                            ><span>first session connects</span
+                            ><span class="result">online sent</span>
+                        </div>
+                        <div class="race-row">
+                            <span class="rev">rev 2</span
+                            ><span>final session disconnects</span
+                            ><span class="result">I/O starts</span>
+                        </div>
+                        <div class="race-row">
+                            <span class="rev">rev 3</span
+                            ><span>reconnect finishes first</span
+                            ><span class="result">online sent</span>
+                        </div>
+                        <div class="race-row blocked">
+                            <span class="rev">rev 2</span
+                            ><span>old offline work resumes</span
+                            ><span class="result">suppressed</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <p class="section-kicker">Implementation map</p>
+                <h2>Follow the state from contract to pixels.</h2>
+                <div class="implementation">
+                    <div class="path-list">
+                        <div class="path">
+                            <span class="path-number">01</span>
+                            <div>
+                                <strong>Shared contract</strong
+                                ><span
+                                    >PresenceState gives HTTP snapshots and
+                                    WebSocket events one wire shape.</span
+                                >
+                            </div>
+                        </div>
+                        <div class="path">
+                            <span class="path-number">02</span>
+                            <div>
+                                <strong>Connection registry</strong
+                                ><span
+                                    >First and final sessions create revisioned
+                                    transitions.</span
+                                >
+                            </div>
+                        </div>
+                        <div class="path">
+                            <span class="path-number">03</span>
+                            <div>
+                                <strong>Presence service</strong
+                                ><span
+                                    >Persists last seen, finds direct peers, and
+                                    rejects stale revisions.</span
+                                >
+                            </div>
+                        </div>
+                        <div class="path">
+                            <span class="path-number">04</span>
+                            <div>
+                                <strong>Realtime context</strong
+                                ><span
+                                    >Orders events by occurredAt and overlays
+                                    them on HTTP data.</span
+                                >
+                            </div>
+                        </div>
+                        <div class="path">
+                            <span class="path-number">05</span>
+                            <div>
+                                <strong>Conversation UI</strong
+                                ><span
+                                    >Shows an online avatar dot or relative
+                                    last-seen text.</span
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="contract">
+                        <div class="frame-label">
+                            One shape · two transports
+                        </div>
+                        <pre><span class="accent-code">type PresenceState</span> = {
+  userId: UUID;
+  online: boolean;
+  lastSeenAt: ISODateTime | null;
+};
+
+GET /api/v1/conversations
+→ { participant, <span class="accent-code">presence</span>, ... }
+
+WebSocket
+→ {
+    type: "presence.updated",
+    occurredAt,
+    payload: <span class="accent-code">PresenceState</span>
+  }
+
+<span class="amber-code">privacy rule</span>
+recipientIds = directConversationPeers(userId)</pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <p class="section-kicker">Verification</p>
+                <h2>The behavior is tested at three distances.</h2>
+                <div class="verify">
+                    <div class="verify-item">
+                        <strong>Unit</strong
+                        ><span
+                            >First/final session transitions, revisions, HTTP
+                            enrichment, and relative-time formatting.</span
+                        >
+                    </div>
+                    <div class="verify-item">
+                        <strong>API end to end</strong
+                        ><span
+                            >Real WebSockets and PostgreSQL verify peer-only
+                            events, multiple tabs, and persisted last
+                            seen.</span
+                        >
+                    </div>
+                    <div class="verify-item">
+                        <strong>Browser</strong
+                        ><span
+                            >Two users see online, last seen, queued messages,
+                            and reconnect recovery in the actual
+                            interface.</span
+                        >
+                    </div>
+                </div>
+            </section>
+
+            <footer>
+                <span>Event Chat · Phase 5 / Presence slice</span>
+                <span>Next lesson: expiring typing indicators</span>
+            </footer>
+        </main>
+
+        <script>
+            const steps = [
+                {
+                    short: "Snapshot",
+                    title: "Load the initial snapshot",
+                    copy: "Bob loads his direct conversations over HTTP. The service joins Alice's persisted last-seen value with the in-memory registry, producing a complete starting state before any live event arrives.",
+                    invariant:
+                        "HTTP answers initial state; WebSockets only need to carry changes.",
+                    label: "GET /api/v1/conversations",
+                    code: '{\\n  \"participant\": { \"username\": \"alice\" },\\n  \"presence\": {\\n    \"userId\": \"alice-id\",\\n    \"online\": false,\\n    \"lastSeenAt\": null\\n  }\\n}',
+                    sessions: 0,
+                    revision: 0,
+                    online: false,
+                    database: "null",
+                    peer: "Offline",
+                    source: "HTTP snapshot",
+                    emission: "none",
+                    pulse: "",
+                },
+                {
+                    short: "First tab",
+                    title: "The first session creates a transition",
+                    copy: "Alice's first authenticated WebSocket changes her connection count from zero to one. The registry returns revision 1, and the gateway publishes one online event to connected direct-conversation peers.",
+                    invariant:
+                        "A transition belongs to the user, not to an individual socket.",
+                    label: "RealtimeConnectionsService.authenticate",
+                    code: 'count: 0 → 1\\nrevision: 0 → 1\\n\\npresence.updated {\\n  userId: \"alice-id\",\\n  online: true,\\n  lastSeenAt: null\\n}',
+                    sessions: 1,
+                    revision: 1,
+                    online: true,
+                    database: "null",
+                    peer: "Online",
+                    source: "WebSocket event",
+                    emission: "online → Bob",
+                    pulse: "to-peer",
+                },
+                {
+                    short: "Second tab",
+                    title: "Another tab changes the count, not presence",
+                    copy: "A second Alice tab authenticates. The registry now owns two sockets for the same user, but Alice was already online. No revision is created and Bob receives no duplicate event.",
+                    invariant:
+                        "More connections do not mean more online events.",
+                    label: "authenticate result",
+                    code: "count: 1 → 2\\nwasOffline: false\\ntransition: null\\n\\n// no presence.updated frame",
+                    sessions: 2,
+                    revision: 1,
+                    online: true,
+                    database: "null",
+                    peer: "Online",
+                    source: "existing override",
+                    emission: "none",
+                    pulse: "",
+                },
+                {
+                    short: "Close one",
+                    title: "A partial disconnect remains online",
+                    copy: "The primary tab closes, but the secondary tab is still authenticated. The socket is cleaned up; user-level presence and durable last-seen state remain untouched.",
+                    invariant:
+                        "Only the final active session may move a user offline.",
+                    label: "RealtimeConnectionsService.remove",
+                    code: 'count: 2 → 1\\nisOnline(\"alice-id\"): true\\ntransition: null\\n\\nlast_seen_at: unchanged',
+                    sessions: 1,
+                    revision: 1,
+                    online: true,
+                    database: "null",
+                    peer: "Online",
+                    source: "existing override",
+                    emission: "none",
+                    pulse: "",
+                },
+                {
+                    short: "Final close",
+                    title: "The final disconnect becomes durable",
+                    copy: "The remaining tab closes. Revision 2 captures one timestamp, PostgreSQL advances last_seen_at monotonically, and only authorized peers receive the offline event.",
+                    invariant:
+                        "Persist once, broadcast once, and use the same timestamp in both places.",
+                    label: "PresenceService.offline",
+                    code: "count: 1 → 0\\nrevision: 1 → 2\\n\\nUPDATE users\\nSET last_seen_at = greatest(old, occurredAt)\\n\\npresence.updated { online: false, lastSeenAt }",
+                    sessions: 0,
+                    revision: 2,
+                    online: false,
+                    database: "18:42:16Z",
+                    peer: "Last seen just now",
+                    source: "WebSocket event",
+                    emission: "offline → Bob",
+                    pulse: "to-db",
+                },
+                {
+                    short: "Race guard",
+                    title: "A reconnect invalidates stale work",
+                    copy: "Imagine the offline database write is still awaiting I/O when Alice reconnects. Revision 3 becomes current. When revision 2 resumes, the presence service sees that it is stale and suppresses its offline broadcast.",
+                    invariant:
+                        "After every await, verify that the transition is still current.",
+                    label: "revision check",
+                    code: 'isCurrent(\"alice-id\", 2) === false\\nisOnline(\"alice-id\") === true\\n\\n// stale offline event is suppressed\\n// revision 3 remains visible',
+                    sessions: 1,
+                    revision: 3,
+                    online: true,
+                    database: "18:42:16Z",
+                    peer: "Online",
+                    source: "WebSocket event",
+                    emission: "stale rev 2 blocked",
+                    pulse: "suppressed",
+                },
+                {
+                    short: "Recover",
+                    title: "Reconnect refreshes both channels",
+                    copy: "When Bob reconnects, the client clears transient WebSocket overrides and resets conversation queries. The fresh HTTP response becomes the baseline; newer occurredAt events may safely override it again.",
+                    invariant:
+                        "Recovery replaces guesses with a fresh snapshot.",
+                    label: "RealtimeProvider.onAuthenticated",
+                    code: "if (reconnected) {\\n  clearPresenceOverrides();\\n  resetConversationQueries();\\n}\\n\\nHTTP snapshot → online: true\\nfuture event → ordered by occurredAt",
+                    sessions: 1,
+                    revision: 3,
+                    online: true,
+                    database: "18:42:16Z",
+                    peer: "Online",
+                    source: "HTTP + WebSocket",
+                    emission: "snapshot recovered",
+                    pulse: "to-peer",
+                },
+            ];
+
+            const refs = {
+                rail: document.getElementById("stepRail"),
+                index: document.getElementById("lessonIndex"),
+                title: document.getElementById("lessonTitle"),
+                copy: document.getElementById("lessonCopy"),
+                invariant: document.getElementById("invariant"),
+                label: document.getElementById("frameLabel"),
+                code: document.getElementById("frameCode"),
+                previous: document.getElementById("previousButton"),
+                next: document.getElementById("nextButton"),
+                reset: document.getElementById("resetButton"),
+                status: document.getElementById("systemStatus"),
+                tabOne: document.getElementById("tabOne"),
+                tabTwo: document.getElementById("tabTwo"),
+                tabOneState: document.getElementById("tabOneState"),
+                tabTwoState: document.getElementById("tabTwoState"),
+                registry: document.getElementById("registryNode"),
+                count: document.getElementById("connectionCount"),
+                revision: document.getElementById("revision"),
+                databaseNode: document.getElementById("databaseNode"),
+                database: document.getElementById("databaseState"),
+                peer: document.getElementById("peerNode"),
+                peerState: document.getElementById("peerState"),
+                source: document.getElementById("onlineSource"),
+                registryState: document.getElementById("registryState"),
+                lastSeen: document.getElementById("lastSeenState"),
+                emission: document.getElementById("emissionState"),
+                pulse: document.getElementById("pulse"),
+            };
+
+            let currentStep = 0;
+
+            steps.forEach(function (step, index) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "step-button";
+                button.textContent =
+                    String(index + 1).padStart(2, "0") + " " + step.short;
+                button.setAttribute(
+                    "aria-label",
+                    "Step " + (index + 1) + ": " + step.title,
+                );
+                button.addEventListener("click", function () {
+                    render(index);
+                });
+                refs.rail.appendChild(button);
+            });
+
+            function setNode(node, active) {
+                node.classList.toggle("active", active);
+                node.classList.toggle("dim", !active);
+            }
+
+            function render(index) {
+                currentStep = Math.max(0, Math.min(index, steps.length - 1));
+                const step = steps[currentStep];
+
+                refs.index.textContent =
+                    "Step " +
+                    String(currentStep + 1).padStart(2, "0") +
+                    " / " +
+                    String(steps.length).padStart(2, "0");
+                refs.title.textContent = step.title;
+                refs.copy.textContent = step.copy;
+                refs.invariant.textContent = step.invariant;
+                refs.label.textContent = step.label;
+                refs.code.textContent = step.code;
+                refs.status.textContent = step.online
+                    ? "Alice online"
+                    : "Alice offline";
+
+                setNode(refs.tabOne, step.sessions >= 1);
+                setNode(refs.tabTwo, step.sessions >= 2);
+                refs.tabOneState.textContent =
+                    step.sessions >= 1
+                        ? "authenticated · active"
+                        : "disconnected";
+                refs.tabTwoState.textContent =
+                    step.sessions >= 2
+                        ? "authenticated · active"
+                        : "disconnected";
+
+                refs.registry.classList.toggle("active", step.sessions > 0);
+                refs.count.textContent = String(step.sessions);
+                refs.count.classList.remove("bump");
+                void refs.count.offsetWidth;
+                refs.count.classList.add("bump");
+                refs.revision.textContent = "revision " + step.revision;
+
+                refs.databaseNode.classList.toggle("active", currentStep === 4);
+                refs.database.textContent = "last_seen_at = " + step.database;
+                refs.peer.classList.toggle("active", step.online);
+                refs.peerState.textContent = step.peer;
+
+                refs.source.textContent = step.source;
+                refs.registryState.textContent = step.online
+                    ? "online"
+                    : "offline";
+                refs.lastSeen.textContent = step.database;
+                refs.emission.textContent = step.emission;
+
+                refs.pulse.className = "pulse";
+                void refs.pulse.offsetWidth;
+                if (step.pulse) refs.pulse.classList.add(step.pulse);
+
+                Array.from(refs.rail.children).forEach(
+                    function (button, buttonIndex) {
+                        button.classList.toggle(
+                            "active",
+                            buttonIndex === currentStep,
+                        );
+                        button.classList.toggle(
+                            "done",
+                            buttonIndex < currentStep,
+                        );
+                        button.setAttribute(
+                            "aria-current",
+                            buttonIndex === currentStep ? "step" : "false",
+                        );
+                    },
+                );
+
+                refs.previous.disabled = currentStep === 0;
+                refs.next.disabled = currentStep === steps.length - 1;
+                refs.next.textContent =
+                    currentStep === steps.length - 1 ? "Complete" : "Next step";
+            }
+
+            refs.previous.addEventListener("click", function () {
+                render(currentStep - 1);
+            });
+            refs.next.addEventListener("click", function () {
+                render(currentStep + 1);
+            });
+            refs.reset.addEventListener("click", function () {
+                render(0);
+            });
+            window.addEventListener("keydown", function (event) {
+                if (event.key === "ArrowRight") render(currentStep + 1);
+                if (event.key === "ArrowLeft") render(currentStep - 1);
+            });
+
+            render(0);
+        </script>
+    </body>
+</html>
