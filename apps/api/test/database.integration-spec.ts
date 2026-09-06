@@ -10,6 +10,7 @@ import {
   users,
 } from '../src/database/schema';
 
+import { UsersRepository } from '../src/modules/users/users.repository';
 describe('database foundation', () => {
   let client: Sql;
   let database: ReturnType<typeof drizzle>;
@@ -103,5 +104,32 @@ describe('database foundation', () => {
         orderedUsers.map((user) => user.id),
       ),
     );
+  });
+
+  it('never moves a durable last-seen timestamp backward', async () => {
+    const [user] = await database
+      .insert(users)
+      .values({
+        username: `presence_${randomUUID().slice(0, 8)}`,
+        passwordHash: 'presence-test-hash',
+      })
+      .returning({ id: users.id });
+    const repository = new UsersRepository(database);
+    const latest = new Date('2026-08-02T08:05:00.000Z');
+    const older = new Date('2026-08-02T08:00:00.000Z');
+
+    try {
+      await repository.updateLastSeenAt(user.id, latest);
+      await repository.updateLastSeenAt(user.id, older);
+
+      const [persisted] = await database
+        .select({ lastSeenAt: users.lastSeenAt })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      expect(persisted.lastSeenAt?.toISOString()).toBe(latest.toISOString());
+    } finally {
+      await database.delete(users).where(eq(users.id, user.id));
+    }
   });
 });

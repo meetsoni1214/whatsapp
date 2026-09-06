@@ -27,6 +27,7 @@ async function startConversation(page: Page, username: string): Promise<void> {
   await result.getByRole("button", { name: "Start chat" }).click();
   await expect(page.getByRole("heading", { name: username })).toBeVisible();
   await expect(page.getByLabel("Live connection: live")).toBeVisible();
+  await expect(page.getByText("Online", { exact: true })).toBeVisible();
 }
 
 async function send(page: Page, content: string): Promise<void> {
@@ -60,6 +61,13 @@ test("two browser sessions deliver, queue, reconnect, and recover durable messag
       bob.getByText("live from alice", { exact: true }),
     ).toBeVisible();
 
+    const aliceSecondary = await aliceContext.newPage();
+    await aliceSecondary.goto("/");
+    await expect(
+      aliceSecondary.getByRole("heading", { name: "Conversations", exact: true }),
+    ).toBeVisible();
+    await aliceSecondary.close();
+    await expect(bob.getByText("Online", { exact: true })).toBeVisible();
     await send(bob, "live from bob");
     await expect(
       alice.getByText("live from bob", { exact: true }),
@@ -76,6 +84,7 @@ test("two browser sessions deliver, queue, reconnect, and recover durable messag
 
     await aliceContext.setOffline(true);
     await expect(alice.getByLabel("Live connection: offline")).toBeVisible();
+    await expect(bob.getByText(/Last seen/)).toBeVisible();
     await send(alice, "queued with one client id");
     await expect(
       alice.getByText("queued with one client id", { exact: true }),
@@ -90,6 +99,7 @@ test("two browser sessions deliver, queue, reconnect, and recover durable messag
     await expect(
       bob.getByText("queued with one client id", { exact: true }),
     ).toHaveCount(1);
+    await expect(bob.getByText("Online", { exact: true })).toBeVisible();
   } finally {
     await aliceContext?.close();
     await bobContext?.close();

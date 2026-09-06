@@ -6,6 +6,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import {
   authenticatedSessionSchema,
   directConversationSchema,
+  directConversationsSchema,
   messagePageSchema,
   protocolVersion,
   serverFrameSchema,
@@ -192,6 +193,122 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
 
     await errorFrame;
     await expect(closed).resolves.toEqual({ code: 1008 });
+  });
+
+  it('tracks presence across sessions and only notifies conversation peers', async () => {
+    const bobSocket = await openSocket(bob.accessToken);
+    const charlieSocket = await openSocket(charlie.accessToken);
+    const onlineForBob = waitForFrame(
+      bobSocket,
+      (frame) =>
+        frame.type === 'presence.updated' &&
+        frame.payload.userId === alice.user.id &&
+        frame.payload.online,
+    );
+    const unrelatedOnline = waitForFrame(
+      charlieSocket,
+      (frame) =>
+        frame.type === 'presence.updated' &&
+        frame.payload.userId === alice.user.id,
+      350,
+    );
+
+    const alicePrimary = await openSocket(alice.accessToken);
+    await expect(onlineForBob).resolves.toMatchObject({
+      type: 'presence.updated',
+      payload: {
+        userId: alice.user.id,
+        online: true,
+        lastSeenAt: null,
+      },
+    });
+    await expect(unrelatedOnline).rejects.toThrow(
+      'Timed out waiting for a WebSocket frame',
+    );
+
+    const onlineResponse = await request(app.getHttpServer())
+      .get('/api/v1/conversations')
+      .set('Authorization', authorization(bob))
+      .expect(200);
+    const onlineConversations = directConversationsSchema.parse(
+      onlineResponse.body as unknown,
+    );
+    expect(onlineConversations[0]?.presence).toEqual({
+      userId: alice.user.id,
+      online: true,
+      lastSeenAt: null,
+    });
+
+    const duplicateOnline = waitForFrame(
+      bobSocket,
+      (frame) =>
+        frame.type === 'presence.updated' &&
+        frame.payload.userId === alice.user.id &&
+        frame.payload.online,
+      350,
+    );
+    const aliceSecondary = await openSocket(alice.accessToken);
+    await expect(duplicateOnline).rejects.toThrow(
+      'Timed out waiting for a WebSocket frame',
+    );
+
+    const prematureOffline = waitForFrame(
+      bobSocket,
+      (frame) =>
+        frame.type === 'presence.updated' &&
+        frame.payload.userId === alice.user.id &&
+        !frame.payload.online,
+      350,
+    );
+    const primaryClosed = waitForClose(alicePrimary);
+    alicePrimary.close(1000, 'Primary tab closed');
+    await primaryClosed;
+    await expect(prematureOffline).rejects.toThrow(
+      'Timed out waiting for a WebSocket frame',
+    );
+
+    const offlineForBob = waitForFrame(
+      bobSocket,
+      (frame) =>
+        frame.type === 'presence.updated' &&
+        frame.payload.userId === alice.user.id &&
+        !frame.payload.online,
+    );
+    const secondaryClosed = waitForClose(aliceSecondary);
+    aliceSecondary.close(1000, 'Final tab closed');
+    await secondaryClosed;
+    const offline = await offlineForBob;
+    expect(offline).toMatchObject({
+      type: 'presence.updated',
+      payload: {
+        userId: alice.user.id,
+        online: false,
+      },
+    });
+    if (offline.type !== 'presence.updated' || !offline.payload.lastSeenAt) {
+      throw new Error('Expected an offline presence timestamp');
+    }
+
+    const [persisted] = await database
+      .select({ lastSeenAt: users.lastSeenAt })
+      .from(users)
+      .where(eq(users.id, alice.user.id))
+      .limit(1);
+    expect(persisted.lastSeenAt?.toISOString()).toBe(
+      offline.payload.lastSeenAt,
+    );
+
+    const offlineResponse = await request(app.getHttpServer())
+      .get('/api/v1/conversations')
+      .set('Authorization', authorization(bob))
+      .expect(200);
+    const offlineConversations = directConversationsSchema.parse(
+      offlineResponse.body as unknown,
+    );
+    expect(offlineConversations[0]?.presence).toEqual(offline.payload);
+
+    bobSocket.close(1000, 'Presence test complete');
+    charlieSocket.close(1000, 'Presence test complete');
   });
 
   it('delivers after commit to every active member session and deduplicates retries', async () => {
