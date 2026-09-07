@@ -26,7 +26,8 @@
     "test:integration": "jest --config ./test/jest-integration.json --runInBand",
     "pretest": "pnpm --filter @event-chat/contracts build",
     "pretest:e2e": "pnpm --filter @event-chat/contracts build",
-    "pretest:integration": "pnpm --filter @event-chat/contracts build"
+    "pretest:integration": "pnpm --filter @event-chat/contracts build",
+    "typecheck": "tsc --noEmit -p test/tsconfig.json"
   },
   "dependencies": {
     "@event-chat/contracts": "workspace:*",

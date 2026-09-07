@@ -16,7 +16,8 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @event-chat/api db:generate",
     "db:migrate": "pnpm --filter @event-chat/api db:migrate",
-    "test:integration": "pnpm --filter @event-chat/api test:integration"
+    "test:integration": "pnpm --filter @event-chat/api test:integration",
+    "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
