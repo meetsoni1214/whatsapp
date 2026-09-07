@@ -4,6 +4,7 @@ A WhatsApp-style learning project built with NestJS, React, PostgreSQL, Drizzle,
 
 - [Architecture plan](./ARCHITECTURE_PLAN.md)
 - [Learning path](./LEARNING_PATH.md)
+- [Typing indicator reviewer guide](./docs/typing-indicator-reviewer-guide.md)
 - [Message pagination walkthrough](./message-pagination-visual.html)
 - [Durable WebSocket lifecycle walkthrough](./websocket-lifecycle-visual.html)
 - [Presence lifecycle walkthrough](./presence-lifecycle-visual.html)
@@ -69,13 +70,17 @@ The development database uses port 5432. The isolated test database uses port 54
 
 ```bash
 pnpm build
+pnpm typecheck
 pnpm lint
 pnpm test
+pnpm db:test:up
 pnpm test:e2e
 pnpm test:integration
 pnpm test:browser:install
 pnpm test:browser
 ```
+
+`pnpm typecheck` checks application and test-file types, including API tests excluded from the production build.
 
 Playwright failure traces, screenshots, and videos are written under `output/playwright/`.
 
@@ -83,4 +88,4 @@ Playwright failure traces, screenshots, and videos are written under `output/pla
 
 Phases 1 through 4 are complete: authenticated users can discover people, create direct conversations, exchange persisted messages over raw WebSockets, retry without duplicates, synchronize multiple sessions, and recover missed history after reconnecting.
 
-Phase 5 is in progress: peer-scoped multi-session presence and durable last-seen recovery are complete. Expiring typing indicators are next, followed by monotonic delivered/read receipts.
+Phase 5 is in progress: peer-scoped multi-session presence, durable last-seen recovery, and expiring typing indicators are complete. Typing refreshes at most every two seconds, stops after three seconds of inactivity, and expires after five seconds without refresh. Monotonic delivered/read receipts are next.

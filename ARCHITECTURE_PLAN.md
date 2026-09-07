@@ -6,7 +6,7 @@ Build a responsive one-to-one chat application as a NestJS modular monolith with
 
 The first production-like milestone is two users in separate browser sessions authenticating, creating a direct conversation, exchanging persisted messages in real time, seeing presence and receipts, reconnecting, and recovering missed messages.
 
-Implementation status: Phases 1 through 4 are complete. Phase 5 is in progress; presence is complete, while typing indicators and receipts remain.
+Implementation status: Phases 1 through 4 are complete. Phase 5 is in progress; presence and typing indicators are complete; delivered/read receipts remain.
 
 ## Phase 1 — Architecture and persistence foundation
 
@@ -45,7 +45,9 @@ Implementation status: Phases 1 through 4 are complete. Phase 5 is in progress; 
 
 ## Phase 5 — Presence, typing, and receipts
 
-Status: presence is complete; typing indicators and receipts are next.
+Status: presence and typing indicators are complete; delivered/read receipts are next.
+
+Typing uses per-conversation, per-user connection leases in process memory. Clients refresh on input at most every two seconds and stop after three seconds of inactivity; server and receiving clients expire state after five seconds. Only conversation peers receive updates. Disconnects and successful message acceptance clear only the sending connection, preserving other active sessions. Typing is never persisted or replayed after reconnect. See the [reviewer guide](./docs/typing-indicator-reviewer-guide.md) for implementation order and verification.
 
 - Keep a user online until the final connection closes and persist last-seen time.
 - Expire ephemeral typing state automatically.

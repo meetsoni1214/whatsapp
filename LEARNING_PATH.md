@@ -166,6 +166,8 @@ Learn:
 
 HTTP remains responsible for history and other request-response operations.
 
+Current implementation: authenticated sockets, durable messaging, reconnect recovery, presence, and expiring typing indicators are implemented. The typing slice demonstrates ephemeral leases, throttling versus debouncing, multi-session aggregation, and stale-timer/connection guards. Read the [typing reviewer guide](./docs/typing-indicator-reviewer-guide.md) alongside the code. Delivered/read receipts are the next implementation slice before internal events.
+
 ### Phase 3: Add events inside the monolith
 
 Introduce a small in-process event bus:
