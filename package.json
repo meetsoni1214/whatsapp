@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm --recursive build",
     "dev": "pnpm --filter @event-chat/contracts build && pnpm --parallel --filter @event-chat/api --filter @event-chat/web dev",
-    "lint": "pnpm --recursive lint",
+    "lint": "pnpm lint:braces && pnpm --recursive lint",
     "test": "pnpm --recursive --if-present test",
     "test:e2e": "pnpm --filter @event-chat/api test:e2e",
     "test:browser": "pnpm db:test:up && playwright test",
@@ -17,10 +17,12 @@
     "db:generate": "pnpm --filter @event-chat/api db:generate",
     "db:migrate": "pnpm --filter @event-chat/api db:migrate",
     "test:integration": "pnpm --filter @event-chat/api test:integration",
-    "typecheck": "pnpm --recursive --if-present typecheck"
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "lint:braces": "oxlint --disable-nested-config -A all -D curly ."
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
-    "jscpd": "^5.1.2"
+    "jscpd": "^5.1.2",
+    "oxlint": "^1.76.0"
   }
 }

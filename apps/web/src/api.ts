@@ -100,7 +100,9 @@ async function authenticate(
     body: JSON.stringify(credentials),
   });
 
-  if (!response.ok) throw await errorFrom(response);
+  if (!response.ok) {
+    throw await errorFrom(response);
+  }
 
   const session = parseSession(await response.json());
   accessToken = session.accessToken;
@@ -143,7 +145,9 @@ async function protectedRequest(
     await restoreSession();
     response = await send();
   }
-  if (!response.ok) throw await errorFrom(response);
+  if (!response.ok) {
+    throw await errorFrom(response);
+  }
   return response.json();
 }
 
@@ -175,7 +179,9 @@ export async function getMessageHistory(
   cursor?: string,
 ): Promise<MessagePage> {
   const search = new URLSearchParams({ limit: "50" });
-  if (cursor) search.set("cursor", cursor);
+  if (cursor) {
+    search.set("cursor", cursor);
+  }
   const value = await protectedRequest(
     `/conversations/${encodeURIComponent(conversationId)}/messages?${search}`,
   );

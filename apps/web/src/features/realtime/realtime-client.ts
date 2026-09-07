@@ -53,7 +53,9 @@ export class RealtimeClient {
   }
 
   start(): void {
-    if (!this.stopped) return;
+    if (!this.stopped) {
+      return;
+    }
     this.stopped = false;
     window.addEventListener("online", this.handleOnline);
     window.addEventListener("offline", this.handleOffline);
@@ -63,10 +65,14 @@ export class RealtimeClient {
   stop(): void {
     this.stopped = true;
     this.authenticated = false;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
     window.removeEventListener("online", this.handleOnline);
     window.removeEventListener("offline", this.handleOffline);
-    for (const message of this.outbox.values()) this.clearAckTimer(message);
+    for (const message of this.outbox.values()) {
+      this.clearAckTimer(message);
+    }
     this.socket?.close(1000, "Client stopped");
     this.socket = undefined;
   }
@@ -94,8 +100,9 @@ export class RealtimeClient {
       !navigator.onLine ||
       !this.socket ||
       this.socket.readyState !== WebSocket.OPEN
-    )
+    ) {
       return false;
+    }
     const frame: SetTypingFrame = {
       v: protocolVersion,
       type: "typing.set",
@@ -112,7 +119,9 @@ export class RealtimeClient {
 
   retryMessage(clientMessageId: string): void {
     const message = this.outbox.get(clientMessageId);
-    if (!message) return;
+    if (!message) {
+      return;
+    }
 
     message.error = undefined;
     message.requestId = crypto.randomUUID();
@@ -127,7 +136,9 @@ export class RealtimeClient {
   }
 
   private connect(): void {
-    if (this.stopped || this.socket) return;
+    if (this.stopped || this.socket) {
+      return;
+    }
     if (!navigator.onLine) {
       this.options.onStatusChange("offline"); // Checked by Browser whether user is online or not
       return;
@@ -142,7 +153,9 @@ export class RealtimeClient {
     this.socket = socket;
 
     socket.addEventListener("open", () => {
-      if (this.stopped || this.socket !== socket) return;
+      if (this.stopped || this.socket !== socket) {
+        return;
+      }
       this.options.onStatusChange("authenticating");
       socket.send(
         JSON.stringify({
@@ -154,13 +167,19 @@ export class RealtimeClient {
       );
     });
     socket.addEventListener("message", (event) => {
-      if (!this.stopped && this.socket === socket) this.handleMessage(event);
+      if (!this.stopped && this.socket === socket) {
+        this.handleMessage(event);
+      }
     });
     socket.addEventListener("close", (event) => {
-      if (this.socket === socket) this.handleClose(event);
+      if (this.socket === socket) {
+        this.handleClose(event);
+      }
     });
     socket.addEventListener("error", () => {
-      if (this.stopped || this.socket !== socket) return;
+      if (this.stopped || this.socket !== socket) {
+        return;
+      }
       if (!this.authenticated) {
         this.options.onProtocolError(
           "The live connection could not be opened.",
@@ -202,7 +221,9 @@ export class RealtimeClient {
       return;
     }
 
-    if (frame.type === "typing.updated" && !this.authenticated) return;
+    if (frame.type === "typing.updated" && !this.authenticated) {
+      return;
+    }
 
     const pending = this.findPending(frame);
     this.options.onFrame(frame, pending ? { ...pending } : undefined);
@@ -229,12 +250,16 @@ export class RealtimeClient {
   }
 
   private handleClose(event: CloseEvent): void {
-    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) return;
+    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) {
+      return;
+    }
     this.socket = undefined;
     this.authenticated = false;
     this.requeueSendingMessages();
 
-    if (this.stopped) return;
+    if (this.stopped) {
+      return;
+    }
 
     const refresh =
       event.code === webSocketCloseCodes.tokenExpired ||
@@ -254,7 +279,9 @@ export class RealtimeClient {
   }
 
   private refreshAndReconnect(): void {
-    if (this.refreshPromise) return;
+    if (this.refreshPromise) {
+      return;
+    }
 
     this.refreshPromise = this.options
       .refreshAccessToken()
@@ -272,7 +299,9 @@ export class RealtimeClient {
   }
 
   private scheduleReconnect(forcedDelay?: number): void {
-    if (this.stopped || this.reconnectTimer) return;
+    if (this.stopped || this.reconnectTimer) {
+      return;
+    }
 
     const exponential = Math.min(
       1_000 * 2 ** this.reconnectAttempt,
@@ -332,7 +361,9 @@ export class RealtimeClient {
 
   private flushOutbox(): void {
     for (const message of this.outbox.values()) {
-      if (message.status !== "failed") this.sendPending(message);
+      if (message.status !== "failed") {
+        this.sendPending(message);
+      }
     }
   }
 
@@ -350,7 +381,9 @@ export class RealtimeClient {
 
   private removePending(clientMessageId: string): void {
     const message = this.outbox.get(clientMessageId);
-    if (!message) return;
+    if (!message) {
+      return;
+    }
     this.clearAckTimer(message);
     this.outbox.delete(clientMessageId);
     this.emitOutbox();
@@ -359,7 +392,9 @@ export class RealtimeClient {
   private requeueSendingMessages(): void {
     for (const message of this.outbox.values()) {
       this.clearAckTimer(message);
-      if (message.status === "sending") message.status = "queued";
+      if (message.status === "sending") {
+        message.status = "queued";
+      }
     }
     this.emitOutbox();
   }
@@ -370,7 +405,9 @@ export class RealtimeClient {
         ackTimer?: ReturnType<typeof setTimeout>;
       }
     ).ackTimer;
-    if (ackTimer) clearTimeout(ackTimer);
+    if (ackTimer) {
+      clearTimeout(ackTimer);
+    }
   }
 
   private emitOutbox(): void {
@@ -380,13 +417,17 @@ export class RealtimeClient {
   }
 
   private readonly handleOnline = (): void => {
-    if (this.stopped || this.socket) return;
+    if (this.stopped || this.socket) {
+      return;
+    }
     this.reconnectAttempt = 0;
     this.scheduleReconnect(0);
   };
 
   private readonly handleOffline = (): void => {
-    if (this.stopped) return;
+    if (this.stopped) {
+      return;
+    }
     this.authenticated = false;
     this.options.onStatusChange("offline");
     this.socket?.close(4000, "Browser offline");
@@ -395,7 +436,9 @@ export class RealtimeClient {
 
 export function getRealtimeUrl(): string {
   const explicit = import.meta.env.VITE_WS_URL;
-  if (explicit) return explicit;
+  if (explicit) {
+    return explicit;
+  }
 
   const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1";
   const url = new URL(apiUrl);

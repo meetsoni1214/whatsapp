@@ -758,8 +758,12 @@
       document.querySelector("#next").addEventListener("click", () => render(current + 1));
       document.querySelector("#replay").addEventListener("click", () => render(0));
       window.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowRight") render(current + 1);
-        if (event.key === "ArrowLeft") render(current - 1);
+        if (event.key === "ArrowRight") {
+          render(current + 1);
+        }
+        if (event.key === "ArrowLeft") {
+          render(current - 1);
+        }
       });
 
       render(0);

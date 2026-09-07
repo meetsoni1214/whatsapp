@@ -78,8 +78,9 @@ export function RealtimeProvider({
       }
 
       if (frame.type === "typing.updated") {
-        if (frame.payload.userId !== session.user.id)
+        if (frame.payload.userId !== session.user.id) {
           typingStore.update(frame.payload);
+        }
         return;
       }
 
@@ -151,14 +152,18 @@ export function RealtimeProvider({
         queryClient.removeQueries({ queryKey: queryKeys.conversations.all });
       },
       onStatusChange: (nextStatus) => {
-        if (nextStatus !== "live") typingStore.clear();
+        if (nextStatus !== "live") {
+          typingStore.clear();
+        }
         setStatus(nextStatus);
       },
     });
     clientRef.current = client;
     client.start();
     const pruneTyping = () => {
-      if (!document.hidden) typingStore.prune();
+      if (!document.hidden) {
+        typingStore.prune();
+      }
     };
     document.addEventListener("visibilitychange", pruneTyping);
 
@@ -183,7 +188,9 @@ export function RealtimeProvider({
         clientRef.current?.retryMessage(clientMessageId),
       sendMessage: (conversationId, content) => {
         const trimmed = content.trim();
-        if (!trimmed) return;
+        if (!trimmed) {
+          return;
+        }
         setError(null);
         clientRef.current?.sendMessage(conversationId, trimmed);
       },

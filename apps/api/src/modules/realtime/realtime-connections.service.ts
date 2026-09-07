@@ -83,10 +83,16 @@ export class RealtimeConnectionsService {
 
   remove(socket: WebSocket): PresenceTransition | null {
     const connection = this.connections.get(socket);
-    if (!connection) return null;
+    if (!connection) {
+      return null;
+    }
 
-    if (connection.authTimer) clearTimeout(connection.authTimer);
-    if (connection.expiryTimer) clearTimeout(connection.expiryTimer);
+    if (connection.authTimer) {
+      clearTimeout(connection.authTimer);
+    }
+    if (connection.expiryTimer) {
+      clearTimeout(connection.expiryTimer);
+    }
     if (connection.user) {
       const userConnections = this.connectionsByUser.get(connection.user.id);
       userConnections?.delete(connection);

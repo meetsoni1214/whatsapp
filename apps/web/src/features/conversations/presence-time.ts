@@ -7,7 +7,9 @@ export function formatLastSeen(lastSeenAt: string, now = Date.now()): string {
     0,
     Math.floor((now - new Date(lastSeenAt).getTime()) / 1000),
   );
-  if (elapsedSeconds < 60) return "just now";
+  if (elapsedSeconds < 60) {
+    return "just now";
+  }
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) {

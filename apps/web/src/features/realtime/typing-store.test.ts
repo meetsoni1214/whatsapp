@@ -21,7 +21,9 @@ describe("TypingStore", () => {
     const snapshot = store.getSnapshot();
     vi.advanceTimersByTime(4_000);
     store.update(update);
-    if (typeof oldExpiry === "function") oldExpiry();
+    if (typeof oldExpiry === "function") {
+      oldExpiry();
+    }
     vi.advanceTimersByTime(1_000);
     expect(store.getSnapshot()).toBe(snapshot);
     vi.advanceTimersByTime(4_000);

@@ -75,7 +75,9 @@ describe('Phase 3 direct conversations and history (e2e)', () => {
         .where(eq(conversations.id, conversationId));
     }
     await database.delete(users).where(like(users.username, `p3%_${suffix}`));
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     await cleanupClient.end();
   });
 

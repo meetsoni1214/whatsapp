@@ -30,21 +30,29 @@ export class TypingStore {
   }: TypingUpdatedFrame["payload"]): void {
     const key = typingKey(conversationId, userId);
     const previous = this.entries.get(key);
-    if (previous) clearTimeout(previous.timer);
+    if (previous) {
+      clearTimeout(previous.timer);
+    }
     if (!isTyping) {
-      if (this.entries.delete(key)) this.publish();
+      if (this.entries.delete(key)) {
+        this.publish();
+      }
       return;
     }
     const entry: Entry = {
       deadline: performance.now() + typingTiming.expiryMs,
       timer: setTimeout(() => {
-        if (this.entries.get(key) !== entry) return;
+        if (this.entries.get(key) !== entry) {
+          return;
+        }
         this.entries.delete(key);
         this.publish();
       }, typingTiming.expiryMs),
     };
     this.entries.set(key, entry);
-    if (!previous) this.publish();
+    if (!previous) {
+      this.publish();
+    }
   }
 
   prune(): void {
@@ -56,18 +64,26 @@ export class TypingStore {
         changed = true;
       }
     }
-    if (changed) this.publish();
+    if (changed) {
+      this.publish();
+    }
   }
 
   clear(): void {
-    for (const entry of this.entries.values()) clearTimeout(entry.timer);
-    if (this.entries.size === 0) return;
+    for (const entry of this.entries.values()) {
+      clearTimeout(entry.timer);
+    }
+    if (this.entries.size === 0) {
+      return;
+    }
     this.entries.clear();
     this.publish();
   }
 
   private publish(): void {
     this.snapshot = new Set(this.entries.keys());
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 }

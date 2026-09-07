@@ -13,7 +13,9 @@ export function upsertRealtimeMessage(
   queryClient.setQueryData<InfiniteData<MessagePage>>(
     queryKeys.conversations.messages(message.conversationId),
     (current) => {
-      if (!current || current.pages.length === 0) return current;
+      if (!current || current.pages.length === 0) {
+        return current;
+      }
 
       const pages = current.pages.map((page) => ({
         ...page,
@@ -34,7 +36,9 @@ export function upsertRealtimeMessage(
   queryClient.setQueryData<DirectConversation[]>(
     queryKeys.conversations.list(),
     (current) => {
-      if (!current) return current;
+      if (!current) {
+        return current;
+      }
 
       return current
         .map((conversation) =>
@@ -46,8 +50,7 @@ export function upsertRealtimeMessage(
           const leftActivity = left.lastMessageAt ?? left.createdAt;
           const rightActivity = right.lastMessageAt ?? right.createdAt;
           return (
-            new Date(rightActivity).getTime() -
-            new Date(leftActivity).getTime()
+            new Date(rightActivity).getTime() - new Date(leftActivity).getTime()
           );
         });
     },

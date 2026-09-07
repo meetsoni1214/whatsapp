@@ -18,7 +18,9 @@ export function useTypingIndicator(
   const stop = useCallback(() => {
     clearTimeout(idleTimer.current);
     idleTimer.current = undefined;
-    if (active.current) sendTyping(conversationId, false);
+    if (active.current) {
+      sendTyping(conversationId, false);
+    }
     active.current = false;
     lastSentAt.current = 0;
   }, [conversationId, sendTyping]);
@@ -46,13 +48,17 @@ export function useTypingIndicator(
   );
 
   useEffect(() => {
-    if (status !== "live") stop();
+    if (status !== "live") {
+      stop();
+    }
     return stop;
   }, [status, stop]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
-      if (document.hidden) stop();
+      if (document.hidden) {
+        stop();
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () =>

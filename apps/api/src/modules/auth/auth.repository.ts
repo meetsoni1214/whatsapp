@@ -96,7 +96,9 @@ export class AuthRepository {
         )
         .returning({ userId: authSessions.userId });
 
-      if (!session) return undefined;
+      if (!session) {
+        return undefined;
+      }
 
       const [user] = await transaction
         .select({ id: users.id, username: users.username })
@@ -104,7 +106,9 @@ export class AuthRepository {
         .where(eq(users.id, session.userId))
         .limit(1);
 
-      if (!user) return undefined;
+      if (!user) {
+        return undefined;
+      }
 
       await transaction.insert(authSessions).values({
         userId: user.id,

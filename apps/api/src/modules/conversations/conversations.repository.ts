@@ -126,7 +126,9 @@ export class ConversationsRepository {
       .where(eq(conversations.id, conversationId))
       .limit(1);
 
-    if (!row) return 'missing';
+    if (!row) {
+      return 'missing';
+    }
     return row.memberId ? 'member' : 'forbidden';
   }
 

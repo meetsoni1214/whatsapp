@@ -84,7 +84,9 @@ export class RealtimeGateway
   handleConnection(socket: WebSocket): void {
     const connection = this.connections.add(socket);
     connection.authTimer = setTimeout(() => {
-      if (connection.user) return;
+      if (connection.user) {
+        return;
+      }
       this.sendError(socket, {
         code: 'AUTHENTICATION_REQUIRED',
         message: 'Authenticate within five seconds of connecting',
@@ -103,7 +105,9 @@ export class RealtimeGateway
 
   handleDisconnect(socket: WebSocket): void {
     const connection = this.connections.get(socket);
-    if (connection) this.typing.disconnect(connection);
+    if (connection) {
+      this.typing.disconnect(connection);
+    }
     const transition = this.connections.remove(socket);
     if (transition) {
       void this.publishPresence('offline', transition);
@@ -114,7 +118,9 @@ export class RealtimeGateway
     this.shuttingDown = true;
     this.unsubscribeTyping?.();
     this.typing.shutdown();
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
     try {
       await this.presence.persistShutdown(
         this.connections.onlineUserIds(),
@@ -161,7 +167,9 @@ export class RealtimeGateway
         code: 'VALIDATION_FAILED',
         message: 'WebSocket frames must contain valid JSON',
       });
-      if (!connection.user) connection.socket.close(1008, 'Invalid frame');
+      if (!connection.user) {
+        connection.socket.close(1008, 'Invalid frame');
+      }
       return;
     }
 
@@ -182,7 +190,9 @@ export class RealtimeGateway
         },
         requestId,
       );
-      if (!connection.user) connection.socket.close(1008, 'Invalid frame');
+      if (!connection.user) {
+        connection.socket.close(1008, 'Invalid frame');
+      }
       return;
     }
 
@@ -215,8 +225,12 @@ export class RealtimeGateway
       const verified = await this.tokens.verifyAccessTokenSession(
         frame.payload.accessToken,
       );
-      if (!this.isActiveConnection(connection)) return;
-      if (connection.authTimer) clearTimeout(connection.authTimer);
+      if (!this.isActiveConnection(connection)) {
+        return;
+      }
+      if (connection.authTimer) {
+        clearTimeout(connection.authTimer);
+      }
       const transition = this.connections.authenticate(
         connection,
         verified.user,
@@ -296,9 +310,14 @@ export class RealtimeGateway
           await this.conversations.memberIds(conversationId)
         ).filter((id) => id !== userId);
         // Membership queries can finish after disconnect or shutdown.
-        if (!this.isActiveConnection(connection)) return;
-        if (isTyping) this.typing.refresh(connection, conversationId, peerIds);
-        else this.typing.stop(connection, conversationId);
+        if (!this.isActiveConnection(connection)) {
+          return;
+        }
+        if (isTyping) {
+          this.typing.refresh(connection, conversationId, peerIds);
+        } else {
+          this.typing.stop(connection, conversationId);
+        }
         return;
       }
 
@@ -323,7 +342,9 @@ export class RealtimeGateway
       });
 
       this.typing.stop(connection, message.conversationId);
-      if (!result.inserted) return;
+      if (!result.inserted) {
+        return;
+      }
 
       const createdFrame: ServerFrame = {
         v: protocolVersion,
@@ -390,7 +411,9 @@ export class RealtimeGateway
         state === 'online'
           ? await this.presence.online(transition)
           : await this.presence.offline(transition);
-      if (!broadcast) return;
+      if (!broadcast) {
+        return;
+      }
 
       const frame: ServerFrame = {
         v: protocolVersion,
@@ -443,12 +466,18 @@ export class RealtimeGateway
   }
 
   private sendSerialized(socket: WebSocket, serialized: string): void {
-    if (socket.readyState === WebSocket.OPEN) socket.send(serialized);
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(serialized);
+    }
   }
 
   private decodeData(data: RawData): string {
-    if (Buffer.isBuffer(data)) return data.toString('utf8');
-    if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
+    if (Buffer.isBuffer(data)) {
+      return data.toString('utf8');
+    }
+    if (Array.isArray(data)) {
+      return Buffer.concat(data).toString('utf8');
+    }
     return Buffer.from(data).toString('utf8');
   }
 

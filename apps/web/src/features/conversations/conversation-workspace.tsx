@@ -229,7 +229,9 @@ function ConversationThread({
   const submitMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const content = draft.trim();
-    if (!content) return;
+    if (!content) {
+      return;
+    }
     typing.stop();
     realtime.sendMessage(conversation.id, content);
     setDraft("");
@@ -427,8 +429,9 @@ function ConversationThread({
             }}
             onBlur={typing.stop}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && event.nativeEvent.isComposing)
+              if (event.key === "Enter" && event.nativeEvent.isComposing) {
                 event.preventDefault();
+              }
             }}
             placeholder={
               realtime.status === "live"

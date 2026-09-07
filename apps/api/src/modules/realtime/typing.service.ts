@@ -35,7 +35,9 @@ export class TypingService {
     conversationId: string,
     peerIds: string[],
   ): void {
-    if (this.stopped || !connection.user) return;
+    if (this.stopped || !connection.user) {
+      return;
+    }
     const userId = connection.user.id;
     const users =
       this.conversations.get(conversationId) ?? new Map<string, TypingGroup>();
@@ -44,13 +46,17 @@ export class TypingService {
       connections: new Map<RealtimeConnection, Lease>(),
     };
     const previous = group.connections.get(connection);
-    if (previous) clearTimeout(previous.timer);
+    if (previous) {
+      clearTimeout(previous.timer);
+    }
 
     const lease: Lease = {
       expiresAt: performance.now() + typingTiming.expiryMs,
       timer: setTimeout(() => {
         // A cancelled callback must not delete a newer refresh.
-        if (group.connections.get(connection) !== lease) return;
+        if (group.connections.get(connection) !== lease) {
+          return;
+        }
         this.stop(connection, conversationId);
       }, typingTiming.expiryMs),
     };
@@ -64,12 +70,16 @@ export class TypingService {
   }
 
   stop(connection: RealtimeConnection, conversationId: string): void {
-    if (!connection.user) return;
+    if (!connection.user) {
+      return;
+    }
     const userId = connection.user.id;
     const users = this.conversations.get(conversationId);
     const group = users?.get(userId);
     const lease = group?.connections.get(connection);
-    if (!group || !lease) return;
+    if (!group || !lease) {
+      return;
+    }
     clearTimeout(lease.timer);
     group.connections.delete(connection);
 
@@ -80,9 +90,13 @@ export class TypingService {
         group.connections.delete(other);
       }
     }
-    if (group.connections.size > 0) return;
+    if (group.connections.size > 0) {
+      return;
+    }
     users!.delete(userId);
-    if (users!.size === 0) this.conversations.delete(conversationId);
+    if (users!.size === 0) {
+      this.conversations.delete(conversationId);
+    }
     this.emit(conversationId, userId, false, group.peerIds);
   }
 
@@ -96,8 +110,9 @@ export class TypingService {
     this.stopped = true;
     for (const users of this.conversations.values()) {
       for (const group of users.values()) {
-        for (const lease of group.connections.values())
+        for (const lease of group.connections.values()) {
           clearTimeout(lease.timer);
+        }
       }
     }
     this.conversations.clear();
@@ -114,6 +129,8 @@ export class TypingService {
       payload: { conversationId, userId, isTyping },
       peerIds,
     };
-    for (const listener of this.listeners) listener(update);
+    for (const listener of this.listeners) {
+      listener(update);
+    }
   }
 }

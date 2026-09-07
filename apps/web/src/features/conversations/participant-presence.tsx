@@ -13,7 +13,9 @@ export function ParticipantPresence({
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (presence.online || !presence.lastSeenAt) return;
+    if (presence.online || !presence.lastSeenAt) {
+      return;
+    }
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
@@ -29,17 +31,12 @@ export function ParticipantPresence({
 
   if (!presence.lastSeenAt) {
     return (
-      <span className={cn("text-muted-foreground", className)}>
-        Offline
-      </span>
+      <span className={cn("text-muted-foreground", className)}>Offline</span>
     );
   }
 
   return (
-    <span
-      className={cn("text-muted-foreground", className)}
-      aria-live="polite"
-    >
+    <span className={cn("text-muted-foreground", className)} aria-live="polite">
       Last seen{" "}
       <time
         dateTime={presence.lastSeenAt}

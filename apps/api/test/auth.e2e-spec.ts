@@ -21,7 +21,9 @@ function cookieFrom(response: Response, name: string): string {
       : [];
   const cookie = values.find((value) => value.startsWith(`${name}=`));
 
-  if (!cookie) throw new Error(`Missing ${name} cookie`);
+  if (!cookie) {
+    throw new Error(`Missing ${name} cookie`);
+  }
   return cookie.split(';', 1)[0];
 }
 
@@ -61,7 +63,9 @@ describe('Phase 2 authentication and user discovery (e2e)', () => {
     await drizzle(cleanupClient)
       .delete(users)
       .where(like(users.username, `p2%_${suffix}`));
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     await cleanupClient.end();
   });
 

@@ -41,13 +41,17 @@ function waitForFrame(
     }, timeoutMs);
 
     const handleMessage = (data: RawData, isBinary: boolean) => {
-      if (isBinary) return;
+      if (isBinary) {
+        return;
+      }
       const parsed = serverFrameSchema.safeParse(
         JSON.parse(
           Buffer.from(data as ArrayBuffer).toString('utf8'),
         ) as unknown,
       );
-      if (!parsed.success || !predicate(parsed.data)) return;
+      if (!parsed.success || !predicate(parsed.data)) {
+        return;
+      }
 
       clearTimeout(timer);
       socket.off('message', handleMessage);
@@ -130,7 +134,9 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
     await database
       .delete(conversations)
       .where(eq(conversations.id, conversationId));
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     await database.delete(users).where(like(users.username, `p4%_${suffix}`));
     await databaseClient.end();
   });
@@ -561,13 +567,17 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
       const frame = serverFrameSchema.parse(
         JSON.parse(Buffer.from(raw as ArrayBuffer).toString('utf8')) as unknown,
       );
-      if (frame.type === 'typing.updated') outsiderUpdates.push(frame);
+      if (frame.type === 'typing.updated') {
+        outsiderUpdates.push(frame);
+      }
     });
     bobFirst.on('message', (raw: RawData) => {
       const frame = serverFrameSchema.parse(
         JSON.parse(Buffer.from(raw as ArrayBuffer).toString('utf8')) as unknown,
       );
-      if (frame.type === 'typing.updated') bobUpdates.push(frame);
+      if (frame.type === 'typing.updated') {
+        bobUpdates.push(frame);
+      }
     });
     try {
       const firstStart = [
@@ -659,7 +669,9 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
         bobSecond,
         outsider,
       ]) {
-        if (socket.readyState === WebSocket.OPEN) await closeSocket(socket);
+        if (socket.readyState === WebSocket.OPEN) {
+          await closeSocket(socket);
+        }
       }
       await database
         .delete(conversations)
@@ -682,8 +694,9 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
       await closeSocket(aliceSocket);
       await stopped;
     } finally {
-      if (aliceSocket.readyState === WebSocket.OPEN)
+      if (aliceSocket.readyState === WebSocket.OPEN) {
         await closeSocket(aliceSocket);
+      }
       await closeSocket(bobSocket);
     }
   });
@@ -736,7 +749,9 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
       membership.mockRestore();
       members.mockRestore();
       refresh.mockRestore();
-      if (socket.readyState === WebSocket.OPEN) await closeSocket(socket);
+      if (socket.readyState === WebSocket.OPEN) {
+        await closeSocket(socket);
+      }
     }
   });
 });

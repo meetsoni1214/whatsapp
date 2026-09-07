@@ -63,7 +63,9 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string | undefined): Promise<IssuedSession> {
-    if (!refreshToken) throw this.invalidSession();
+    if (!refreshToken) {
+      throw this.invalidSession();
+    }
 
     const nextRefreshToken = this.tokens.createRefreshToken();
     const user = await this.repository.rotateSession(
@@ -72,12 +74,16 @@ export class AuthService {
       nextRefreshToken,
     );
 
-    if (!user) throw this.invalidSession();
+    if (!user) {
+      throw this.invalidSession();
+    }
     return this.createIssuedSession(user, nextRefreshToken);
   }
 
   async logout(refreshToken: string | undefined): Promise<void> {
-    if (!refreshToken) return;
+    if (!refreshToken) {
+      return;
+    }
 
     await this.repository.revokeSession(
       this.tokens.hashRefreshToken(refreshToken),

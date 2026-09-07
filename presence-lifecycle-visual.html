@@ -1479,7 +1479,9 @@ recipientIds = directConversationPeers(userId)</pre>
 
                 refs.pulse.className = "pulse";
                 void refs.pulse.offsetWidth;
-                if (step.pulse) refs.pulse.classList.add(step.pulse);
+                if (step.pulse) {
+                  refs.pulse.classList.add(step.pulse);
+                }
 
                 Array.from(refs.rail.children).forEach(
                     function (button, buttonIndex) {
@@ -1514,8 +1516,12 @@ recipientIds = directConversationPeers(userId)</pre>
                 render(0);
             });
             window.addEventListener("keydown", function (event) {
-                if (event.key === "ArrowRight") render(currentStep + 1);
-                if (event.key === "ArrowLeft") render(currentStep - 1);
+                if (event.key === "ArrowRight") {
+                  render(currentStep + 1);
+                }
+                if (event.key === "ArrowLeft") {
+                  render(currentStep - 1);
+                }
             });
 
             render(0);

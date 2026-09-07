@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { AlertCircle, ArrowUpRight, LoaderCircle, ShieldCheck } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowUpRight,
+  LoaderCircle,
+  ShieldCheck,
+} from "lucide-react";
 import { ApiError } from "@/api";
 import { AppBrand } from "@/components/app-brand";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -28,7 +33,9 @@ export function AuthScreen() {
   const copy = authCopy[mode];
 
   function selectMode(value: string) {
-    if (value !== "login" && value !== "register") return;
+    if (value !== "login" && value !== "register") {
+      return;
+    }
     setMode(value);
     authenticate.reset();
   }
@@ -113,7 +120,10 @@ export function AuthScreen() {
             aria-describedby={errorMessage ? "auth-error" : undefined}
           >
             <div className="grid gap-2.5">
-              <Label htmlFor={`${mode}-username`} className="text-xs text-muted-foreground">
+              <Label
+                htmlFor={`${mode}-username`}
+                className="text-xs text-muted-foreground"
+              >
                 Username
               </Label>
               <Input
@@ -131,14 +141,19 @@ export function AuthScreen() {
             </div>
 
             <div className="grid gap-2.5">
-              <Label htmlFor={`${mode}-password`} className="text-xs text-muted-foreground">
+              <Label
+                htmlFor={`${mode}-password`}
+                className="text-xs text-muted-foreground"
+              >
                 Password
               </Label>
               <Input
                 id={`${mode}-password`}
                 name="password"
                 type="password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
                 minLength={mode === "register" ? 8 : 1}
                 maxLength={128}
                 placeholder="••••••••"
@@ -177,7 +192,8 @@ export function AuthScreen() {
           <div className="mt-6 flex items-start gap-2.5 border-l-2 border-border pl-3 text-[11px] leading-relaxed text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
             <p>
-              Refresh sessions live in an HttpOnly cookie. Access tokens stay in memory.
+              Refresh sessions live in an HttpOnly cookie. Access tokens stay in
+              memory.
             </p>
           </div>
         </div>

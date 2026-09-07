@@ -57,16 +57,22 @@ export class ApiExceptionFilter implements ExceptionFilter {
   }
 
   private readErrorResponse(exception: unknown): ErrorResponse {
-    if (!(exception instanceof HttpException)) return {};
+    if (!(exception instanceof HttpException)) {
+      return {};
+    }
 
     const response = exception.getResponse();
-    if (typeof response === 'string') return { message: response };
+    if (typeof response === 'string') {
+      return { message: response };
+    }
     return this.isRecord(response) ? response : {};
   }
 
   private readErrorCode(value: unknown, status: number): ApiErrorCode {
     const parsedCode = apiErrorCodeSchema.safeParse(value);
-    if (parsedCode.success) return parsedCode.data;
+    if (parsedCode.success) {
+      return parsedCode.data;
+    }
 
     switch (status) {
       case 400:
@@ -85,7 +91,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
   }
 
   private readMessage(value: unknown, status: number): string {
-    if (typeof value === 'string' && value.length > 0) return value;
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
     if (
       Array.isArray(value) &&
       value.length > 0 &&
@@ -94,7 +102,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return value.join('; ');
     }
 
-    if (status >= 500) return 'An unexpected error occurred';
+    if (status >= 500) {
+      return 'An unexpected error occurred';
+    }
     return HttpStatus[status] ?? 'Request failed';
   }
 

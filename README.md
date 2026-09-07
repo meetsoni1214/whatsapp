@@ -80,6 +80,8 @@ pnpm test:browser:install
 pnpm test:browser
 ```
 
+`pnpm lint` enforces braces around all `if`, `else`, and loop bodies across JavaScript and TypeScript files, including shared packages and tests. Run `pnpm lint:braces --fix` to automatically add missing braces. The API and web linters also enforce this rule.
+
 `pnpm typecheck` checks application and test-file types, including API tests excluded from the production build.
 
 Playwright failure traces, screenshots, and videos are written under `output/playwright/`.
