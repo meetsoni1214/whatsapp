@@ -19,6 +19,7 @@ import {
   useConversations,
   useMessageHistory,
 } from "@/features/conversations/queries";
+import { useTypingIndicator } from "./use-typing-indicator";
 import { ParticipantPresence } from "@/features/conversations/participant-presence";
 import { useRealtime } from "@/features/realtime/realtime-state";
 import { cn } from "@/lib/utils";
@@ -116,7 +117,8 @@ function ConversationList({
             const activity =
               conversation.lastMessageAt ?? conversation.createdAt;
             const presence =
-              realtime.presenceFor(conversation.participant.id) ?? conversation.presence;
+              realtime.presenceFor(conversation.participant.id) ??
+              conversation.presence;
             const isSelected = selectedConversationId === conversation.id;
 
             return (
@@ -184,6 +186,15 @@ function ConversationThread({
   const participantPresence =
     realtime.presenceFor(conversation.participant.id) ?? conversation.presence;
   const [draft, setDraft] = useState("");
+  const typing = useTypingIndicator(
+    conversation.id,
+    realtime.status,
+    realtime.setTyping,
+  );
+  const peerIsTyping = realtime.isTyping(
+    conversation.id,
+    conversation.participant.id,
+  );
   const messages = useMemo(
     () => history.data?.pages.flatMap((page) => page.data).reverse() ?? [],
     [history.data],
@@ -219,6 +230,7 @@ function ConversationThread({
     event.preventDefault();
     const content = draft.trim();
     if (!content) return;
+    typing.stop();
     realtime.sendMessage(conversation.id, content);
     setDraft("");
   };
@@ -252,10 +264,21 @@ function ConversationThread({
           <h2 className="truncate font-serif text-xl font-normal tracking-tight">
             {conversation.participant.username}
           </h2>
-          <ParticipantPresence
-            presence={participantPresence}
-            className="text-[10px]"
-          />
+          <div
+            className="min-h-4 text-[10px]"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {peerIsTyping ? (
+              <span className="text-primary">Typing…</span>
+            ) : (
+              <ParticipantPresence
+                presence={participantPresence}
+                className="text-[10px]"
+              />
+            )}
+          </div>
         </div>
         <LockKeyhole
           className="ml-auto size-3.5 text-primary"
@@ -398,7 +421,15 @@ function ConversationThread({
             aria-label="Message composer"
             maxLength={4096}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              typing.onDraftChange(event.target.value);
+            }}
+            onBlur={typing.stop}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.nativeEvent.isComposing)
+                event.preventDefault();
+            }}
             placeholder={
               realtime.status === "live"
                 ? "Write a message"
@@ -490,6 +521,7 @@ export function ConversationWorkspace({
       >
         {selectedConversation ? (
           <ConversationThread
+            key={selectedConversation.id}
             conversation={selectedConversation}
             currentUser={currentUser}
             onBack={() => onSelect(null)}

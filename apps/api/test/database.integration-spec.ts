@@ -10,10 +10,12 @@ import {
   users,
 } from '../src/database/schema';
 
+import type { Database } from '../src/database/database.types';
+import * as schema from '../src/database/schema';
 import { UsersRepository } from '../src/modules/users/users.repository';
 describe('database foundation', () => {
   let client: Sql;
-  let database: ReturnType<typeof drizzle>;
+  let database: Database;
 
   beforeAll(async () => {
     const databaseUrl =
@@ -21,7 +23,7 @@ describe('database foundation', () => {
       'postgres://event_chat:event_chat@localhost:5433/event_chat_test';
 
     client = postgres(databaseUrl, { max: 1 });
-    database = drizzle(client);
+    database = drizzle(client, { schema });
 
     await migrate(database, { migrationsFolder: './drizzle' });
   });

@@ -24,6 +24,8 @@ import {
 } from '@nestjs/websockets';
 import WebSocket, { type RawData, type Server } from 'ws';
 import { AuthTokenService } from '../auth/auth-token.service';
+import { ConversationsService } from '../conversations/conversations.service';
+import { TypingService, type TypingUpdate } from './typing.service';
 import { MessagesService } from '../messages/messages.service';
 import {
   REALTIME_AUTH_TIMEOUT_MS,
@@ -56,15 +58,22 @@ export class RealtimeGateway
 {
   private readonly logger = new Logger(RealtimeGateway.name);
   private heartbeatTimer?: NodeJS.Timeout;
+  private unsubscribeTyping?: () => void;
+  private shuttingDown = false;
 
   constructor(
     private readonly tokens: AuthTokenService,
     private readonly messages: MessagesService,
     private readonly presence: PresenceService,
     private readonly connections: RealtimeConnectionsService,
+    private readonly conversations: ConversationsService,
+    private readonly typing: TypingService,
   ) {}
 
   afterInit(): void {
+    this.unsubscribeTyping = this.typing.subscribe((update) =>
+      this.publishTyping(update),
+    );
     this.heartbeatTimer = setInterval(
       () => this.runHeartbeat(),
       REALTIME_HEARTBEAT_INTERVAL_MS,
@@ -93,6 +102,8 @@ export class RealtimeGateway
   }
 
   handleDisconnect(socket: WebSocket): void {
+    const connection = this.connections.get(socket);
+    if (connection) this.typing.disconnect(connection);
     const transition = this.connections.remove(socket);
     if (transition) {
       void this.publishPresence('offline', transition);
@@ -100,6 +111,9 @@ export class RealtimeGateway
   }
 
   async onApplicationShutdown(): Promise<void> {
+    this.shuttingDown = true;
+    this.unsubscribeTyping?.();
+    this.typing.shutdown();
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     try {
       await this.presence.persistShutdown(
@@ -201,6 +215,7 @@ export class RealtimeGateway
       const verified = await this.tokens.verifyAccessTokenSession(
         frame.payload.accessToken,
       );
+      if (!this.isActiveConnection(connection)) return;
       if (connection.authTimer) clearTimeout(connection.authTimer);
       const transition = this.connections.authenticate(
         connection,
@@ -260,7 +275,7 @@ export class RealtimeGateway
       return;
     }
 
-    if (frame.type !== 'message.send') {
+    if (frame.type === 'receipt.update') {
       this.sendError(
         connection.socket,
         {
@@ -273,6 +288,20 @@ export class RealtimeGateway
     }
 
     try {
+      if (frame.type === 'typing.set') {
+        const { conversationId, isTyping } = frame.payload;
+        const userId = connection.user!.id;
+        await this.conversations.assertMember(conversationId, userId);
+        const peerIds = (
+          await this.conversations.memberIds(conversationId)
+        ).filter((id) => id !== userId);
+        // Membership queries can finish after disconnect or shutdown.
+        if (!this.isActiveConnection(connection)) return;
+        if (isTyping) this.typing.refresh(connection, conversationId, peerIds);
+        else this.typing.stop(connection, conversationId);
+        return;
+      }
+
       const result = await this.messages.create(
         connection.user!.id,
         frame.payload,
@@ -293,6 +322,7 @@ export class RealtimeGateway
         },
       });
 
+      this.typing.stop(connection, message.conversationId);
       if (!result.inserted) return;
 
       const createdFrame: ServerFrame = {
@@ -317,11 +347,37 @@ export class RealtimeGateway
       const realtimeError = this.mapError(error);
       if (realtimeError.code === 'INTERNAL_ERROR') {
         this.logger.error(
-          `Message command failed (${frame.requestId})`,
+          `Realtime command failed (${frame.requestId})`,
           error instanceof Error ? error.stack : String(error),
         );
       }
       this.sendError(connection.socket, realtimeError, frame.requestId);
+    }
+  }
+
+  private isActiveConnection(connection: RealtimeConnection): boolean {
+    return (
+      !this.shuttingDown &&
+      this.connections.get(connection.socket) === connection &&
+      connection.socket.readyState === WebSocket.OPEN
+    );
+  }
+
+  private publishTyping(update: TypingUpdate): void {
+    try {
+      const frame: ServerFrame = {
+        v: protocolVersion,
+        type: 'typing.updated',
+        eventId: randomUUID(),
+        occurredAt: new Date().toISOString(),
+        payload: update.payload,
+      };
+      const serialized = JSON.stringify(serverFrameSchema.parse(frame));
+      for (const recipient of this.connections.forUsers(update.peerIds)) {
+        this.sendSerialized(recipient.socket, serialized);
+      }
+    } catch (error) {
+      this.logger.error('Could not broadcast typing update', error);
     }
   }
 

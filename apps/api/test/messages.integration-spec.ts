@@ -4,11 +4,13 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import { conversations, messages, users } from '../src/database/schema';
+import type { Database } from '../src/database/database.types';
+import * as schema from '../src/database/schema';
 import { MessagesRepository } from '../src/modules/messages/messages.repository';
 
 describe('message persistence', () => {
   let client: Sql;
-  let database: ReturnType<typeof drizzle>;
+  let database: Database;
   let repository: MessagesRepository;
   const userIds: string[] = [];
   const conversationIds: string[] = [];
@@ -18,7 +20,7 @@ describe('message persistence', () => {
       process.env.TEST_DATABASE_URL ??
       'postgres://event_chat:event_chat@localhost:5433/event_chat_test';
     client = postgres(databaseUrl, { max: 4 });
-    database = drizzle(client);
+    database = drizzle(client, { schema });
     await migrate(database, { migrationsFolder: './drizzle' });
     repository = new MessagesRepository(database);
   });

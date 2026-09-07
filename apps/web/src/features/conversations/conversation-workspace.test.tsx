@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DirectConversation } from "@event-chat/contracts";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getMessageHistory, listConversations } from "@/api";
@@ -10,6 +10,8 @@ import { ConversationWorkspace } from "./conversation-workspace";
 const sendMessage = vi.fn();
 const retryMessage = vi.fn();
 const presenceFor = vi.fn();
+const setTyping = vi.fn(() => true);
+const isTyping = vi.fn(() => false);
 
 vi.mock("@/features/realtime/realtime-state", () => ({
   useRealtime: () => ({
@@ -18,6 +20,8 @@ vi.mock("@/features/realtime/realtime-state", () => ({
     retryMessage,
     sendMessage,
     presenceFor,
+    setTyping,
+    isTyping,
     status: "live",
   }),
 }));
@@ -77,6 +81,10 @@ describe("ConversationWorkspace", () => {
     sendMessage.mockReset();
     presenceFor.mockReset();
     retryMessage.mockReset();
+    setTyping.mockReset();
+    setTyping.mockReturnValue(true);
+    isTyping.mockReset();
+    isTyping.mockReturnValue(false);
   });
 
   it("links the empty inbox to user discovery", async () => {
@@ -127,6 +135,8 @@ describe("ConversationWorkspace", () => {
     await userEvent.type(composer, "  Live hello  ");
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     expect(sendMessage).toHaveBeenCalledWith(conversation.id, "Live hello");
+    expect(setTyping).toHaveBeenCalledWith(conversation.id, true);
+    expect(setTyping).toHaveBeenLastCalledWith(conversation.id, false);
 
     await userEvent.click(screen.getByRole("button", { name: "Load earlier" }));
     expect(await screen.findByText("Older hello")).toBeInTheDocument();
@@ -157,11 +167,53 @@ describe("ConversationWorkspace", () => {
     });
     renderWorkspace();
 
-    expect(
-      await screen.findByLabelText("bob is online"),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("bob is online")).toBeInTheDocument();
     await userEvent.click(screen.getByText("bob"));
     expect(screen.getByText("Online")).toBeInTheDocument();
     expect(screen.getAllByLabelText("bob is online")).toHaveLength(2);
+  });
+  it("shows the peer's typing in the thread and preserves avatar presence", async () => {
+    isTyping.mockReturnValue(true);
+    presenceFor.mockReturnValue({
+      userId: conversation.participant.id,
+      online: true,
+      lastSeenAt: null,
+    });
+    vi.mocked(listConversations).mockResolvedValue([conversation]);
+    vi.mocked(getMessageHistory).mockResolvedValue({
+      data: [],
+      nextCursor: null,
+    });
+    renderWorkspace();
+    await userEvent.click(await screen.findByText("bob"));
+    expect(screen.getByRole("status")).toHaveTextContent("Typing…");
+    expect(isTyping).toHaveBeenCalledWith(
+      conversation.id,
+      conversation.participant.id,
+    );
+    expect(screen.getAllByLabelText("bob is online")).toHaveLength(2);
+    isTyping.mockReturnValue(false);
+    fireEvent.change(screen.getByLabelText("Message composer"), {
+      target: { value: "new edit" },
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Online");
+    fireEvent.blur(screen.getByLabelText("Message composer"));
+    expect(setTyping).toHaveBeenLastCalledWith(conversation.id, false);
+  });
+
+  it("does not submit Enter while an input method is composing", async () => {
+    vi.mocked(listConversations).mockResolvedValue([conversation]);
+    vi.mocked(getMessageHistory).mockResolvedValue({
+      data: [],
+      nextCursor: null,
+    });
+    renderWorkspace();
+    await userEvent.click(await screen.findByText("bob"));
+    const composer = screen.getByLabelText("Message composer");
+    fireEvent.change(composer, { target: { value: "draft" } });
+    expect(
+      fireEvent.keyDown(composer, { key: "Enter", isComposing: true }),
+    ).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });

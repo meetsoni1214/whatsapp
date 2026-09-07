@@ -22,6 +22,8 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import WebSocket, { type RawData } from 'ws';
 import { configureApp } from '../src/app.config';
+import { ConversationsService } from '../src/modules/conversations/conversations.service';
+import { TypingService } from '../src/modules/realtime/typing.service';
 import { AppModule } from '../src/app.module';
 import { conversations, messages, users } from '../src/database/schema';
 
@@ -502,5 +504,239 @@ describe('Phase 4 raw WebSocket messaging (e2e)', () => {
 
     await timeoutError;
     await expect(closed).resolves.toEqual({ code: 1008 });
+  });
+  function setTyping(socket: WebSocket, isTyping: boolean): string {
+    const requestId = randomUUID();
+    socket.send(
+      JSON.stringify({
+        v: protocolVersion,
+        type: 'typing.set',
+        requestId,
+        payload: { conversationId, isTyping },
+      }),
+    );
+    return requestId;
+  }
+
+  function typingFrame(
+    socket: WebSocket,
+    isTyping: boolean,
+    timeout = 3_000,
+  ): Promise<ServerFrame> {
+    return waitForFrame(
+      socket,
+      (frame) =>
+        frame.type === 'typing.updated' &&
+        frame.payload.conversationId === conversationId &&
+        frame.payload.userId === alice.user.id &&
+        frame.payload.isTyping === isTyping,
+      timeout,
+    );
+  }
+
+  async function closeSocket(socket: WebSocket): Promise<void> {
+    const closed = waitForClose(socket);
+    socket.close();
+    await closed;
+  }
+
+  it('scopes typing to the conversation, aggregates sessions, and clears accepted messages', async () => {
+    // Charlie is a presence peer of Alice, but not a member of Alice/Bob's chat.
+    const otherChatResponse = await request(app.getHttpServer())
+      .post('/api/v1/conversations/direct')
+      .set('Authorization', authorization(alice))
+      .send({ participantId: charlie.user.id })
+      .expect(200);
+    const otherChat = directConversationSchema.parse(
+      otherChatResponse.body as unknown,
+    );
+    const bobFirst = await openSocket(bob.accessToken);
+    const bobSecond = await openSocket(bob.accessToken);
+    const outsider = await openSocket(charlie.accessToken);
+    const aliceFirst = await openSocket(alice.accessToken);
+    const aliceSecond = await openSocket(alice.accessToken);
+    const outsiderUpdates: ServerFrame[] = [];
+    const bobUpdates: ServerFrame[] = [];
+    outsider.on('message', (raw: RawData) => {
+      const frame = serverFrameSchema.parse(
+        JSON.parse(Buffer.from(raw as ArrayBuffer).toString('utf8')) as unknown,
+      );
+      if (frame.type === 'typing.updated') outsiderUpdates.push(frame);
+    });
+    bobFirst.on('message', (raw: RawData) => {
+      const frame = serverFrameSchema.parse(
+        JSON.parse(Buffer.from(raw as ArrayBuffer).toString('utf8')) as unknown,
+      );
+      if (frame.type === 'typing.updated') bobUpdates.push(frame);
+    });
+    try {
+      const firstStart = [
+        typingFrame(bobFirst, true),
+        typingFrame(bobSecond, true),
+      ];
+      setTyping(aliceFirst, true);
+      await Promise.all(firstStart);
+      const secondStart = typingFrame(bobFirst, true);
+      setTyping(aliceSecond, true);
+      await secondStart;
+      const firstMessage = waitForFrame(
+        bobFirst,
+        (frame) =>
+          frame.type === 'message.created' &&
+          frame.payload.content === 'another tab is still typing',
+      );
+      aliceFirst.send(
+        JSON.stringify({
+          v: protocolVersion,
+          type: 'message.send',
+          requestId: randomUUID(),
+          payload: {
+            conversationId,
+            clientMessageId: randomUUID(),
+            content: 'another tab is still typing',
+          },
+        }),
+      );
+      await firstMessage;
+      await closeSocket(aliceFirst);
+      const renewed = typingFrame(bobFirst, true);
+      setTyping(aliceSecond, true);
+      await renewed;
+      expect(
+        bobUpdates.every(
+          (frame) => frame.type === 'typing.updated' && frame.payload.isTyping,
+        ),
+      ).toBe(true);
+
+      const forbidden = waitForFrame(
+        outsider,
+        (frame) => frame.type === 'error' && frame.payload.code === 'FORBIDDEN',
+      );
+      const requestId = setTyping(outsider, true);
+      expect(await forbidden).toMatchObject({ requestId });
+      expect(outsiderUpdates).toEqual([]);
+
+      const stopped = [
+        typingFrame(bobFirst, false),
+        typingFrame(bobSecond, false),
+      ];
+      const accepted = waitForFrame(
+        aliceSecond,
+        (frame) => frame.type === 'message.accepted',
+      );
+      const clientMessageId = randomUUID();
+      const sendFrame = {
+        v: protocolVersion,
+        type: 'message.send',
+        requestId: randomUUID(),
+        payload: {
+          conversationId,
+          clientMessageId,
+          content: 'typing acceptance fallback',
+        },
+      };
+      aliceSecond.send(JSON.stringify(sendFrame));
+      await Promise.all([...stopped, accepted]);
+
+      const restarted = typingFrame(bobFirst, true);
+      setTyping(aliceSecond, true);
+      await restarted;
+      const duplicateStopped = typingFrame(bobFirst, false);
+      const duplicateAccepted = waitForFrame(
+        aliceSecond,
+        (frame) => frame.type === 'message.accepted',
+      );
+      aliceSecond.send(
+        JSON.stringify({ ...sendFrame, requestId: randomUUID() }),
+      );
+      await Promise.all([duplicateStopped, duplicateAccepted]);
+      expect(outsiderUpdates).toEqual([]);
+    } finally {
+      for (const socket of [
+        aliceFirst,
+        aliceSecond,
+        bobFirst,
+        bobSecond,
+        outsider,
+      ]) {
+        if (socket.readyState === WebSocket.OPEN) await closeSocket(socket);
+      }
+      await database
+        .delete(conversations)
+        .where(eq(conversations.id, otherChat.id));
+    }
+  });
+
+  it('expires missing stops and clears typing on disconnect', async () => {
+    const bobSocket = await openSocket(bob.accessToken);
+    const aliceSocket = await openSocket(alice.accessToken);
+    try {
+      const started = typingFrame(bobSocket, true);
+      setTyping(aliceSocket, true);
+      await started;
+      await typingFrame(bobSocket, false, 7_000);
+      const restarted = typingFrame(bobSocket, true);
+      setTyping(aliceSocket, true);
+      await restarted;
+      const stopped = typingFrame(bobSocket, false);
+      await closeSocket(aliceSocket);
+      await stopped;
+    } finally {
+      if (aliceSocket.readyState === WebSocket.OPEN)
+        await closeSocket(aliceSocket);
+      await closeSocket(bobSocket);
+    }
+  });
+
+  it('does not restore typing if authorization finishes after disconnect', async () => {
+    const socket = await openSocket(alice.accessToken);
+    const conversationsService = app.get(ConversationsService);
+    const typing = app.get(TypingService);
+    const original =
+      conversationsService.assertMember.bind(conversationsService);
+    let release!: () => void;
+    let entered!: () => void;
+    let checked!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const membersRead = new Promise<void>((resolve) => {
+      checked = resolve;
+    });
+    const membership = jest
+      .spyOn(conversationsService, 'assertMember')
+      .mockImplementationOnce(async (...args) => {
+        entered();
+        await gate;
+        await original(...args);
+      });
+    const originalMembers =
+      conversationsService.memberIds.bind(conversationsService);
+    const members = jest
+      .spyOn(conversationsService, 'memberIds')
+      .mockImplementationOnce(async (id) => {
+        const ids = await originalMembers(id);
+        checked();
+        return ids;
+      });
+    const refresh = jest.spyOn(typing, 'refresh');
+    try {
+      setTyping(socket, true);
+      await started;
+      await closeSocket(socket);
+      release();
+      await membersRead;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      release();
+      membership.mockRestore();
+      members.mockRestore();
+      refresh.mockRestore();
+      if (socket.readyState === WebSocket.OPEN) await closeSocket(socket);
+    }
   });
 });

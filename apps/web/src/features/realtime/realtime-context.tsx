@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useSyncExternalStore,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   AuthenticatedSession,
@@ -21,6 +29,8 @@ import {
 
 import { RealtimeContext, type RealtimeContextValue } from "./realtime-state";
 
+import { TypingStore, typingKey } from "./typing-store";
+
 interface TimedPresence {
   occurredAt: string;
   state: PresenceState;
@@ -42,6 +52,16 @@ export function RealtimeProvider({
   >({});
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [typingStore] = useState(() => new TypingStore());
+  const typingSnapshot = useSyncExternalStore(
+    typingStore.subscribe,
+    typingStore.getSnapshot,
+  );
+  const setTyping = useCallback(
+    (conversationId: string, isTyping: boolean) =>
+      clientRef.current?.setTyping(conversationId, isTyping) ?? false,
+    [],
+  );
 
   useEffect(() => {
     tokenRef.current = session.accessToken;
@@ -54,6 +74,12 @@ export function RealtimeProvider({
     ): void => {
       if (frame.type === "error") {
         setError(frame.payload.message);
+        return;
+      }
+
+      if (frame.type === "typing.updated") {
+        if (frame.payload.userId !== session.user.id)
+          typingStore.update(frame.payload);
         return;
       }
 
@@ -120,25 +146,38 @@ export function RealtimeProvider({
       onOutboxChange: setPendingMessages,
       onProtocolError: setError,
       onSessionExpired: () => {
+        typingStore.clear();
         queryClient.setQueryData(queryKeys.session, null);
         queryClient.removeQueries({ queryKey: queryKeys.conversations.all });
       },
-      onStatusChange: setStatus,
+      onStatusChange: (nextStatus) => {
+        if (nextStatus !== "live") typingStore.clear();
+        setStatus(nextStatus);
+      },
     });
     clientRef.current = client;
     client.start();
+    const pruneTyping = () => {
+      if (!document.hidden) typingStore.prune();
+    };
+    document.addEventListener("visibilitychange", pruneTyping);
 
     return () => {
+      document.removeEventListener("visibilitychange", pruneTyping);
+      typingStore.clear();
       client.stop();
       clientRef.current = null;
     };
-  }, [queryClient, session.user.id]);
+  }, [queryClient, session.user.id, typingStore]);
 
   const value = useMemo<RealtimeContextValue>(
     () => ({
       error,
       pendingMessages,
       status,
+      setTyping,
+      isTyping: (conversationId, userId) =>
+        typingSnapshot.has(typingKey(conversationId, userId)),
       presenceFor: (userId) => presenceOverrides[userId]?.state,
       retryMessage: (clientMessageId) =>
         clientRef.current?.retryMessage(clientMessageId),
@@ -149,7 +188,14 @@ export function RealtimeProvider({
         clientRef.current?.sendMessage(conversationId, trimmed);
       },
     }),
-    [error, pendingMessages, presenceOverrides, status],
+    [
+      error,
+      pendingMessages,
+      presenceOverrides,
+      status,
+      setTyping,
+      typingSnapshot,
+    ],
   );
 
   return (

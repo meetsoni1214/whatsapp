@@ -3,15 +3,12 @@ import {
   serverFrameSchema,
   webSocketCloseCodes,
   type SendMessageFrame,
+  type SetTypingFrame,
   type ServerFrame,
 } from "@event-chat/contracts";
 
 export type RealtimeStatus =
-  | "connecting"
-  | "authenticating"
-  | "live"
-  | "reconnecting"
-  | "offline";
+  "connecting" | "authenticating" | "live" | "reconnecting" | "offline";
 
 export interface PendingMessage {
   clientMessageId: string;
@@ -90,6 +87,29 @@ export class RealtimeClient {
     return clientMessageId;
   }
 
+  setTyping(conversationId: string, isTyping: boolean): boolean {
+    if (
+      this.stopped ||
+      !this.authenticated ||
+      !navigator.onLine ||
+      !this.socket ||
+      this.socket.readyState !== WebSocket.OPEN
+    )
+      return false;
+    const frame: SetTypingFrame = {
+      v: protocolVersion,
+      type: "typing.set",
+      requestId: crypto.randomUUID(),
+      payload: { conversationId, isTyping },
+    };
+    try {
+      this.socket.send(JSON.stringify(frame));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   retryMessage(clientMessageId: string): void {
     const message = this.outbox.get(clientMessageId);
     if (!message) return;
@@ -122,6 +142,7 @@ export class RealtimeClient {
     this.socket = socket;
 
     socket.addEventListener("open", () => {
+      if (this.stopped || this.socket !== socket) return;
       this.options.onStatusChange("authenticating");
       socket.send(
         JSON.stringify({
@@ -132,9 +153,14 @@ export class RealtimeClient {
         }),
       );
     });
-    socket.addEventListener("message", (event) => this.handleMessage(event));
-    socket.addEventListener("close", (event) => this.handleClose(event));
+    socket.addEventListener("message", (event) => {
+      if (!this.stopped && this.socket === socket) this.handleMessage(event);
+    });
+    socket.addEventListener("close", (event) => {
+      if (this.socket === socket) this.handleClose(event);
+    });
     socket.addEventListener("error", () => {
+      if (this.stopped || this.socket !== socket) return;
       if (!this.authenticated) {
         this.options.onProtocolError(
           "The live connection could not be opened.",
@@ -175,6 +201,8 @@ export class RealtimeClient {
       this.flushOutbox();
       return;
     }
+
+    if (frame.type === "typing.updated" && !this.authenticated) return;
 
     const pending = this.findPending(frame);
     this.options.onFrame(frame, pending ? { ...pending } : undefined);
@@ -359,6 +387,7 @@ export class RealtimeClient {
 
   private readonly handleOffline = (): void => {
     if (this.stopped) return;
+    this.authenticated = false;
     this.options.onStatusChange("offline");
     this.socket?.close(4000, "Browser offline");
   };

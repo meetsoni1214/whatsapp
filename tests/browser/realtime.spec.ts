@@ -64,7 +64,10 @@ test("two browser sessions deliver, queue, reconnect, and recover durable messag
     const aliceSecondary = await aliceContext.newPage();
     await aliceSecondary.goto("/");
     await expect(
-      aliceSecondary.getByRole("heading", { name: "Conversations", exact: true }),
+      aliceSecondary.getByRole("heading", {
+        name: "Conversations",
+        exact: true,
+      }),
     ).toBeVisible();
     await aliceSecondary.close();
     await expect(bob.getByText("Online", { exact: true })).toBeVisible();
@@ -105,3 +108,73 @@ test("two browser sessions deliver, queue, reconnect, and recover durable messag
     await bobContext?.close();
   }
 });
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test(`typing appears, expires, stops, and recovers at ${viewport.width}px`, async ({
+    browser,
+  }, testInfo) => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 8);
+    const aliceName = `typing_alice_${suffix}`;
+    const bobName = `typing_bob_${suffix}`;
+    const aliceContext = await browser.newContext({ viewport });
+    const bobContext = await browser.newContext({ viewport });
+    try {
+      const alice = await aliceContext.newPage();
+      const bob = await bobContext.newPage();
+      await register(alice, aliceName);
+      await register(bob, bobName);
+      await startConversation(alice, bobName);
+      await startConversation(bob, aliceName);
+      const composer = alice.getByLabel("Message composer");
+      const typing = bob.getByRole("status");
+
+      await composer.fill("draft");
+      await expect(typing).toHaveText("Typing…");
+      await expect(
+        bob.getByLabel(`${aliceName} is online`).last(),
+      ).toBeVisible();
+      await bob.screenshot({
+        path: testInfo.outputPath("typing-header.png"),
+        fullPage: true,
+      });
+      await composer.pressSequentially(" continues", { delay: 300 });
+      await expect(typing).toHaveText("Typing…");
+      await expect(typing).toHaveText("Online", { timeout: 6_000 });
+
+      await composer.fill("clear this");
+      await expect(typing).toHaveText("Typing…");
+      await composer.clear();
+      await expect(typing).toHaveText("Online");
+
+      await composer.fill("delivered after typing");
+      await expect(typing).toHaveText("Typing…");
+      await alice.getByRole("button", { name: "Send message" }).click();
+      await expect(
+        bob.getByText("delivered after typing", { exact: true }),
+      ).toBeVisible();
+      await expect(typing).toHaveText("Online");
+
+      await composer.fill("connection interruption");
+      await expect(typing).toHaveText("Typing…");
+      await aliceContext.setOffline(true);
+      await expect(alice.getByLabel("Live connection: offline")).toBeVisible();
+      await expect(typing).not.toHaveText("Typing…");
+      await composer.fill("offline draft");
+      await aliceContext.setOffline(false);
+      await expect(alice.getByLabel("Live connection: live")).toBeVisible();
+      await expect(typing).toHaveText("Online");
+      await composer.fill("fresh input");
+      await expect(typing).toHaveText("Typing…");
+      await alice
+        .getByRole("navigation", { name: "Workspace" })
+        .getByRole("button", { name: "Find people" })
+        .click();
+      await expect(typing).toHaveText("Online");
+    } finally {
+      await Promise.allSettled([aliceContext.close(), bobContext.close()]);
+    }
+  });
+}

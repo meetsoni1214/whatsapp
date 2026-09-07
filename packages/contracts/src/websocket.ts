@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
   apiErrorCodeSchema,
   entityIdSchema,
@@ -6,10 +6,16 @@ import {
   presenceStateSchema,
   requestIdSchema,
   timestampSchema,
-} from './common';
-import { publicUserSchema } from './auth';
+} from "./common";
+import { publicUserSchema } from "./auth";
 
 export const protocolVersion = 1 as const;
+
+export const typingTiming = {
+  refreshMs: 2_000,
+  idleMs: 3_000,
+  expiryMs: 5_000,
+} as const;
 
 export const webSocketCloseCodes = {
   tokenExpired: 4001,
@@ -17,7 +23,7 @@ export const webSocketCloseCodes = {
 
 export const authenticateFrameSchema = z.object({
   v: z.literal(protocolVersion),
-  type: z.literal('auth.authenticate'),
+  type: z.literal("auth.authenticate"),
   requestId: requestIdSchema,
   payload: z.object({
     accessToken: z.string().min(1),
@@ -26,7 +32,7 @@ export const authenticateFrameSchema = z.object({
 
 export const sendMessageFrameSchema = z.object({
   v: z.literal(protocolVersion),
-  type: z.literal('message.send'),
+  type: z.literal("message.send"),
   requestId: requestIdSchema,
   payload: z.object({
     conversationId: entityIdSchema,
@@ -37,17 +43,17 @@ export const sendMessageFrameSchema = z.object({
 
 export const updateReceiptFrameSchema = z.object({
   v: z.literal(protocolVersion),
-  type: z.literal('receipt.update'),
+  type: z.literal("receipt.update"),
   requestId: requestIdSchema,
   payload: z.object({
     messageId: entityIdSchema,
-    status: z.enum(['delivered', 'read']),
+    status: z.enum(["delivered", "read"]),
   }),
 });
 
 export const setTypingFrameSchema = z.object({
   v: z.literal(protocolVersion),
-  type: z.literal('typing.set'),
+  type: z.literal("typing.set"),
   requestId: requestIdSchema,
   payload: z.object({
     conversationId: entityIdSchema,
@@ -55,7 +61,7 @@ export const setTypingFrameSchema = z.object({
   }),
 });
 
-export const clientFrameSchema = z.discriminatedUnion('type', [
+export const clientFrameSchema = z.discriminatedUnion("type", [
   authenticateFrameSchema,
   sendMessageFrameSchema,
   updateReceiptFrameSchema,
@@ -71,7 +77,7 @@ const serverEnvelopeShape = {
 
 export const authenticatedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('auth.authenticated'),
+  type: z.literal("auth.authenticated"),
   payload: z.object({
     user: publicUserSchema,
   }),
@@ -79,7 +85,7 @@ export const authenticatedFrameSchema = z.object({
 
 export const messageAcceptedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('message.accepted'),
+  type: z.literal("message.accepted"),
   payload: z.object({
     messageId: entityIdSchema,
     clientMessageId: entityIdSchema,
@@ -90,7 +96,7 @@ export const messageAcceptedFrameSchema = z.object({
 
 export const messageCreatedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('message.created'),
+  type: z.literal("message.created"),
   payload: z.object({
     messageId: entityIdSchema,
     clientMessageId: entityIdSchema,
@@ -103,18 +109,18 @@ export const messageCreatedFrameSchema = z.object({
 
 export const receiptUpdatedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('receipt.updated'),
+  type: z.literal("receipt.updated"),
   payload: z.object({
     messageId: entityIdSchema,
     userId: entityIdSchema,
-    status: z.enum(['sent', 'delivered', 'read']),
+    status: z.enum(["sent", "delivered", "read"]),
     updatedAt: timestampSchema,
   }),
 });
 
 export const typingUpdatedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('typing.updated'),
+  type: z.literal("typing.updated"),
   payload: z.object({
     conversationId: entityIdSchema,
     userId: entityIdSchema,
@@ -124,13 +130,13 @@ export const typingUpdatedFrameSchema = z.object({
 
 export const presenceUpdatedFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('presence.updated'),
+  type: z.literal("presence.updated"),
   payload: presenceStateSchema,
 });
 
 export const errorFrameSchema = z.object({
   ...serverEnvelopeShape,
-  type: z.literal('error'),
+  type: z.literal("error"),
   payload: z.object({
     code: apiErrorCodeSchema,
     message: z.string().min(1),
@@ -138,7 +144,7 @@ export const errorFrameSchema = z.object({
   }),
 });
 
-export const serverFrameSchema = z.discriminatedUnion('type', [
+export const serverFrameSchema = z.discriminatedUnion("type", [
   authenticatedFrameSchema,
   messageAcceptedFrameSchema,
   messageCreatedFrameSchema,
@@ -152,5 +158,7 @@ export type ClientFrame = z.infer<typeof clientFrameSchema>;
 export type ServerFrame = z.infer<typeof serverFrameSchema>;
 export type AuthenticateFrame = z.infer<typeof authenticateFrameSchema>;
 export type SendMessageFrame = z.infer<typeof sendMessageFrameSchema>;
-export type ClientMessageType = ClientFrame['type'];
-export type ServerMessageType = ServerFrame['type'];
+export type SetTypingFrame = z.infer<typeof setTypingFrameSchema>;
+export type TypingUpdatedFrame = z.infer<typeof typingUpdatedFrameSchema>;
+export type ClientMessageType = ClientFrame["type"];
+export type ServerMessageType = ServerFrame["type"];

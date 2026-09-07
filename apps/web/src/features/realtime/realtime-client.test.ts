@@ -125,10 +125,7 @@ describe("RealtimeClient", () => {
     });
     socket.message(authenticatedFrame());
 
-    const clientMessageId = harness.client.sendMessage(
-      conversationId,
-      "hello",
-    );
+    const clientMessageId = harness.client.sendMessage(conversationId, "hello");
     expect(harness.getOutbox()).toMatchObject([
       { clientMessageId, content: "hello", status: "sending" },
     ]);
@@ -209,5 +206,67 @@ describe("RealtimeClient", () => {
       payload: { accessToken: "access-two" },
     });
     harness.client.stop();
+  });
+  it("sends typing only while live and never queues or replays it", async () => {
+    vi.useFakeTimers();
+    const { client, getOutbox } = createHarness();
+    expect(client.setTyping(conversationId, true)).toBe(false);
+    client.start();
+    const first = FakeWebSocket.instances[0];
+    first.open();
+    expect(client.setTyping(conversationId, true)).toBe(false);
+    first.message(authenticatedFrame());
+    expect(client.setTyping(conversationId, true)).toBe(true);
+    expect(JSON.parse(first.sent[1])).toMatchObject({
+      type: "typing.set",
+      payload: { conversationId, isTyping: true },
+    });
+    expect(client.setTyping(conversationId, false)).toBe(true);
+    expect(getOutbox()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+    first.close();
+    expect(client.setTyping(conversationId, true)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = FakeWebSocket.instances[1];
+    second.open();
+    second.message(authenticatedFrame());
+    expect(second.sent).toHaveLength(1);
+    expect(getOutbox()).toEqual([]);
+    client.stop();
+  });
+
+  it("drops failed typing sends and updates from unauthenticated or retired sockets", async () => {
+    vi.useFakeTimers();
+    const { client, onFrame, getOutbox } = createHarness();
+    const typing: ServerFrame = {
+      v: protocolVersion,
+      type: "typing.updated",
+      eventId,
+      occurredAt,
+      payload: { conversationId, userId: user.id, isTyping: true },
+    };
+    client.start();
+    const first = FakeWebSocket.instances[0];
+    first.open();
+    first.message(typing);
+    expect(onFrame).not.toHaveBeenCalled();
+    first.message(authenticatedFrame());
+    vi.spyOn(first, "send").mockImplementationOnce(() => {
+      throw new Error("closed");
+    });
+    expect(client.setTyping(conversationId, true)).toBe(false);
+    expect(getOutbox()).toEqual([]);
+    first.close();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = FakeWebSocket.instances[1];
+    second.open();
+    second.message(authenticatedFrame());
+    first.message(typing);
+    expect(onFrame).not.toHaveBeenCalled();
+    second.message(typing);
+    expect(onFrame).toHaveBeenCalledOnce();
+    client.stop();
+    second.message(typing);
+    expect(onFrame).toHaveBeenCalledOnce();
   });
 });

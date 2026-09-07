@@ -5,6 +5,7 @@ import { MessagesModule } from '../messages/messages.module';
 import { UsersModule } from '../users/users.module';
 import { PresenceService } from './presence.service';
 import { RealtimeConnectionsModule } from './realtime-connections.module';
+import { TypingService } from './typing.service';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Module({
@@ -15,6 +16,6 @@ import { RealtimeGateway } from './realtime.gateway';
     RealtimeConnectionsModule,
     UsersModule,
   ],
-  providers: [PresenceService, RealtimeGateway],
+  providers: [PresenceService, TypingService, RealtimeGateway],
 })
 export class RealtimeModule {}

@@ -172,7 +172,7 @@ export function PeopleWorkspace({
               type="button"
               variant="ghost"
               size="sm"
-              className="col-start-3 ml-auto hidden gap-2 text-[11px] text-muted-foreground sm:flex"
+              className="col-start-3 mb-3 ml-auto flex gap-2 text-[11px] text-muted-foreground sm:col-start-4 sm:mb-0"
               onClick={() =>
                 createConversation.mutate(result.id, {
                   onSuccess: (conversation) =>
